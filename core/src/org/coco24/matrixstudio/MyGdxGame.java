@@ -17,6 +17,8 @@ import com.kotcrab.vis.ui.widget.color.ColorPicker;
 import com.kotcrab.vis.ui.widget.color.ColorPickerStyle;
 import com.rpsg.lazyFont.LazyBitmapFont;
 
+import aurelienribon.tweenengine.Tween;
+
 public class MyGdxGame extends Game
 {
     public static class R
@@ -30,6 +32,9 @@ public class MyGdxGame extends Game
 	public void create () {
 
 	    System.out.println("PPI: " + Gdx.graphics.getPpiY()) ;
+
+		Tween.registerAccessor(MainScreen.class, new PagesSurface.Companion.PagesSurfaceAccessor());
+
 		R.PPI = (Gdx.graphics.getPpiX() + Gdx.graphics.getPpiY()) / 2;
 		if(Gdx.app.getType() == Application.ApplicationType.Desktop)
 		{

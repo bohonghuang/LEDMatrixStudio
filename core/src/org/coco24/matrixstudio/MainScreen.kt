@@ -1,5 +1,9 @@
 package org.coco24.matrixstudio
 
+import aurelienribon.tweenengine.Timeline
+import aurelienribon.tweenengine.Tween
+import aurelienribon.tweenengine.TweenManager
+import aurelienribon.tweenengine.equations.Linear
 import com.badlogic.gdx.*
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.Pixmap
@@ -23,8 +27,10 @@ import com.kotcrab.vis.ui.widget.color.ColorPickerAdapter
 import org.coco24.matrixstudio.MyGdxGame.R
 import java.lang.IllegalStateException
 
-class MainScreen: Screen
+class MainScreen: Screen, PagesSurface
 {
+
+
     lateinit var ledPannelScrollPane: VisScrollPane
 
     var pannelWidth = 10
@@ -114,10 +120,27 @@ class MainScreen: Screen
     lateinit var lightsBackColorImage: Image
     val pages = object : Array<LEDPage>()
     {
+        fun syncTotalFrames()
+        {
+            totalFrameLabel.setText(size.toString())
+        }
         override fun add(value: LEDPage?)
         {
             super.add(value)
-            totalFrameLabel.setText(size.toString())
+            syncTotalFrames()
+        }
+
+        override fun removeIndex(index: Int): LEDPage
+        {
+            val ret = super.removeIndex(index)
+            syncTotalFrames()
+            return ret
+        }
+
+        override fun insert(index: Int, value: LEDPage?)
+        {
+            super.insert(index, value)
+            syncTotalFrames()
         }
     }
 
@@ -200,8 +223,9 @@ class MainScreen: Screen
             currentPageIndex = pages.indexOf(value)
         }
 
-    fun changePage(page: Int)
+    override fun changePage(page: Int)
     {
+
         pannelToPage()
         currentPageIndex = page
         pageToPannel()
@@ -209,7 +233,15 @@ class MainScreen: Screen
         currentFrameTextField.text = (currentPageIndex + 1).toString()
         currentFrameTextField.isInputValid = true
     }
+    override fun getPagesSize(): Int
+    {
+        return pages.size
+    }
 
+    override fun getCurrentPage(): Int
+    {
+        return currentPageIndex
+    }
     fun pageToPannel() = syncPannelAndPage(true)
     fun pannelToPage() = syncPannelAndPage(false)
     private fun syncPannelAndPage(pageToPannel: Boolean)
@@ -232,6 +264,14 @@ class MainScreen: Screen
         }
     }
 
+    enum class PlayerStatus
+    {
+        Playing, Paused, Stopped
+    }
+    val playerTweenManager = TweenManager()
+    var playerStatus = PlayerStatus.Stopped
+    var playerSpeed = 96
+    val disabledWidgetsWhenPlaying = Array<Actor>()
     override fun show()
     {
         val tableBackground = (VisUI.getSkin().get(VisImageButton.VisImageButtonStyle::class.java).up as NinePatchDrawable).tint(if(R.PPI < 128) Color.WHITE else Color.LIGHT_GRAY)
@@ -268,7 +308,7 @@ class MainScreen: Screen
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
                         {
-                            pannelSize += 120 * R.SCALE
+                            pannelSize += 60 * R.SCALE
                         }
                     })
                     val viewZoomOutMenuItem = MenuItem("缩小")
@@ -276,7 +316,7 @@ class MainScreen: Screen
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
                         {
-                            pannelSize -= 120 * R.SCALE
+                            pannelSize -= 60 * R.SCALE
                         }
                     })
                     val viewPannelStyle = MenuItem("矩阵面板样式")
@@ -338,6 +378,60 @@ class MainScreen: Screen
                 val deviceSelectBox = VisSelectBox<String>()
                 deviceSelectBox.setItems("Launchpad MKII", "设备2", "设备3")
                 subMenuBarLeftTable.add(deviceSelectBox).minWidth(200f * R.SCALE)
+                val playerControllerSpeedTextField = VisTextField("96")
+                playerControllerSpeedTextField.textFieldFilter = object : VisTextField.TextFieldFilter.DigitsOnlyFilter()
+                {
+                    override fun acceptChar(textField: VisTextField, c: Char): Boolean
+                    {
+                        if(super.acceptChar(textField, c))
+                        {
+                            return true
+                        }else
+                        {
+                            playerSpeed = textField.text.toIntOrNull()?:0
+                            return false
+                        }
+                    }
+                }
+
+//                subMenuBarLeftTable.addSeparator(true)
+                subMenuBarLeftTable.add("速度:")
+                subMenuBarLeftTable.add(playerControllerSpeedTextField).width(64f * R.SCALE)
+                val playerControllerPlayButton = VisImageButton("default")
+                playerControllerPlayButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        playerStatus = PlayerStatus.Playing
+                        Gdx.graphics.isContinuousRendering = true
+                        playerControllerSpeedTextField.textFieldFilter.acceptChar(playerControllerSpeedTextField, '\n')
+                        playerTweenManager.killAll()
+                        Timeline.createSequence()
+                                .push(Tween.set(this@MainScreen, 0).target(0f))
+                                .push(Tween.to(this@MainScreen, 0, 1f).target(pages.size - 0.00001f).ease(Linear.INOUT))
+                                .repeat(Tween.INFINITY, 0f).start(playerTweenManager)
+                        disabledWidgetsWhenPlaying.forEach {
+                            setTouchable(it, Touchable.disabled)
+                        }
+                    }
+                })
+                playerControllerPlayButton.add(Image(Texture("play.png"))).maxSize(24 * R.SCALE)
+                playerControllerPlayButton.pack()
+                val playerControllerStopButton = VisTextButton("■")
+                playerControllerStopButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        playerStatus = PlayerStatus.Stopped
+                        Gdx.graphics.isContinuousRendering = false
+                        playerTweenManager.killAll()
+                        disabledWidgetsWhenPlaying.forEach {
+                            setTouchable(it, Touchable.childrenOnly)
+                        }
+                    }
+                })
+                subMenuBarLeftTable.add(playerControllerPlayButton)
+                subMenuBarLeftTable.add(playerControllerStopButton)
                 subMenuBarLeftTable.cells.forEach {
                     it.left().pad(5f * R.SCALE)
                 }
@@ -517,6 +611,49 @@ class MainScreen: Screen
                     }
                     c.isDigit()
                 }
+                val deleteFrameButton = VisTextButton("×")
+                deleteFrameButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        if(pages.size > 1)
+                        {
+                            pages.removeIndex(currentPageIndex)
+                            currentPageIndex --
+                            currentFrameTextField.text = (currentPageIndex + 1).toString()
+                            pageToPannel()
+                        }
+                        else
+                        {
+                            currentPage.leds.forEach {
+                                it.forEach {
+                                    it.setColor(Color.BLACK)
+                                }
+                            }
+                            pageToPannel()
+                        }
+                    }
+                })
+                val duplicateFrameButton = VisTextButton("▼")
+                duplicateFrameButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        pannelToPage()
+                        val page = LEDPage(pannelWidth, pannelHeight)
+                        val currentPage = currentPage
+                        for(i in 0 until pannelHeight)
+                        {
+                            for(j in 0 until pannelHeight)
+                            {
+                                page.leds[i][j].setColor(currentPage.leds[i][j].color)
+                            }
+                        }
+                        pages.insert(currentPageIndex, page)
+                        currentFrameTextField.text = (++ currentPageIndex + 1).toString()
+                        pageToPannel()
+                    }
+                })
                 previousFrameButton.addListener(object : ChangeListener()
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -546,9 +683,12 @@ class MainScreen: Screen
                 timeLineControllerTable.add(totalFrameLabel).width(50f * R.SCALE)
                 timeLineControllerTable.add(nextFrameButton)
                 timeLineControllerTable.add(addFrameButton).padLeft(5 * R.SCALE)
+                timeLineControllerTable.add(duplicateFrameButton)
+                timeLineControllerTable.add(deleteFrameButton)
                 timeLineControllerTable.pack()
                 bottomMenuBar.add(timeLineControllerTable).row()
                 bottomMenuBar.pack()
+                disabledWidgetsWhenPlaying.add(bottomMenuBar)
             }
 
             rootTable.setFillParent(true)
@@ -577,6 +717,16 @@ class MainScreen: Screen
         else if(actor is WidgetGroup)
             actor.children.forEach { setBackground(it, background) }
 
+    }
+    fun setTouchable(actor: Actor,touchable: Touchable)
+    {
+        actor.touchable = touchable
+        if(actor is Button)
+        {
+            actor.isDisabled = touchable == Touchable.disabled
+        }
+        else if(actor is WidgetGroup)
+            actor.children.forEach { setTouchable(it, touchable) }
     }
     fun changeColor(color: Color)
     {
@@ -615,6 +765,7 @@ class MainScreen: Screen
     override fun render(delta: Float)
     {
         stage.act();
+        playerTweenManager.update(Gdx.graphics.deltaTime * playerSpeed / 8 / pages.size)
         stage.draw();
     }
 
