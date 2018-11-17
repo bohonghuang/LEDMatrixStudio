@@ -8,6 +8,7 @@ import com.badlogic.gdx.utils.Align
 import com.kotcrab.vis.ui.widget.VisTable
 import com.kotcrab.vis.ui.widget.VisTextButton
 import com.kotcrab.vis.ui.widget.VisWindow
+import org.coco24.matrixstudio.MyGdxGame.R
 
 class AboutWindow: VisWindow("关于")
 {
@@ -16,11 +17,11 @@ class AboutWindow: VisWindow("关于")
     init
     {
         val largeLogo = Image(logoTexture)
-        rootTable.add(largeLogo).expand().pad(10f).maxSize(200f, 200f).row()
-        rootTable.addSeparator().width(160f).row()
+        rootTable.add(largeLogo).expand().pad(10f * R.SCALE).size(200f * R.SCALE).row()
+        rootTable.addSeparator().width(160f * R.SCALE).row()
         rootTable.add("Matrix Studio").row()
         rootTable.add("2018").row()
-        rootTable.addSeparator().width(160f).row()
+        rootTable.addSeparator().width(160f * R.SCALE).row()
         val confirmButton = VisTextButton("确定")
         confirmButton.addListener(object : ChangeListener()
         {
@@ -29,7 +30,7 @@ class AboutWindow: VisWindow("关于")
                 close()
             }
         })
-        rootTable.add(confirmButton).expand().pad(5f).minWidth(250f)
+        rootTable.add(confirmButton).expand().pad(5f * R.SCALE).minWidth(250f * R.SCALE)
         rootTable.pack()
         add(rootTable)
         pack()

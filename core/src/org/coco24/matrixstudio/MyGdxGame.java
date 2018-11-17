@@ -1,5 +1,6 @@
 package org.coco24.matrixstudio;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
@@ -20,25 +21,39 @@ public class MyGdxGame extends Game
 {
     public static class R
     {
-        static float PPI = 108;
+        static float PPI = 100;
+        static float SCALE = 1f;
+        static float unitsPerPixel = 1f;
+        static int fontSize = 20;
     }
-	SpriteBatch batch;
-	Texture img;
-
 	@Override
 	public void create () {
 
 	    System.out.println("PPI: " + Gdx.graphics.getPpiY()) ;
-	    float ppi = (Gdx.graphics.getPpiX() + Gdx.graphics.getPpiY()) / 2;
-	    ppi = R.PPI;
-	    if(ppi <= 128)
-//		    VisUI.load(VisUI.SkinScale.X1);
-                VisUI.load("skins/neutralizer/skin/neutralizer-ui.json");
-		else VisUI.load(VisUI.SkinScale.X2);
-//        VisUI.load("skins/tinted/x2/tinted.json");
+		R.PPI = (Gdx.graphics.getPpiX() + Gdx.graphics.getPpiY()) / 2;
+		if(Gdx.app.getType() == Application.ApplicationType.Desktop)
+		{
+			R.SCALE = R.PPI / 100;
+			R.fontSize *= 0.8f;
+			if(R.PPI < 128)
+//				VisUI.load(VisUI.SkinScale.X1);
+				VisUI.load("skins/neutralizerui/neutralizer-ui.json");
+			else
+			{
+				VisUI.load(VisUI.SkinScale.X2);
+				R.SCALE /= 2;
+			}
 
+		}
+		else
+		{
+			VisUI.load(VisUI.SkinScale.X2);
+			R.SCALE = 1.2f;
+			R.unitsPerPixel =  600f / Gdx.graphics.getHeight();
+			R.fontSize *= 0.9f;
+		}
         FreeTypeFontGenerator generator = new FreeTypeFontGenerator(Gdx.files.internal("fonts/default.ttf"));
-		LazyBitmapFont lazyBitmapFont = new LazyBitmapFont(generator, (int)(ppi * 0.15f));
+		LazyBitmapFont lazyBitmapFont = new LazyBitmapFont(generator, (int)(R.fontSize * R.SCALE));
 		VisUI.getSkin().get(Label.LabelStyle.class).font = lazyBitmapFont;
 		VisUI.getSkin().get(VisLabel.LabelStyle.class).font = lazyBitmapFont;
 		VisUI.getSkin().get(VisTextButton.VisTextButtonStyle.class).font = lazyBitmapFont;
@@ -53,8 +68,6 @@ public class MyGdxGame extends Game
 		VisUI.getSkin().get(VisTextField.VisTextFieldStyle.class).font = lazyBitmapFont;
 		VisUI.getSkin().get(ColorPickerStyle.class).titleFont = lazyBitmapFont;
 		VisUI.getSkin().get(VisCheckBox.VisCheckBoxStyle.class).font = lazyBitmapFont;
-		batch = new SpriteBatch();
-		img = new Texture("badlogic.jpg");
 		setScreen(new MainScreen());
         Gdx.graphics.setContinuousRendering(false);
 	}
@@ -64,17 +77,11 @@ public class MyGdxGame extends Game
 		Gdx.gl.glClearColor(0, 0, 0, 1);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		super.render();
-
-//		Gdx.gl.glClearColor(1, 0, 0, 1);
-//		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-//		batch.begin();
-//		batch.draw(img, 0, 0);
-//		batch.end();
 	}
 	
 	@Override
 	public void dispose () {
-		batch.dispose();
-		img.dispose();
+		VisUI.dispose();
+
 	}
 }
