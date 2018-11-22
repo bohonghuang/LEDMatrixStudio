@@ -46,7 +46,7 @@ open class LEDPannelEntity(val WIDTH: Int, val HEIGHT: Int): Table()
 
             override fun touchDown(event: InputEvent?, x: Float, y: Float, pointer: Int, button: Int): Boolean
             {
-                colorToTemp()
+                cellsToTemp()
                 firstLedEntity = updateLed(x, y, true)
                 return super.touchDown(event, x, y, pointer, button)
             }
@@ -58,7 +58,7 @@ open class LEDPannelEntity(val WIDTH: Int, val HEIGHT: Int): Table()
 
             override fun touchUp(event: InputEvent?, x: Float, y: Float, pointer: Int, button: Int)
             {
-                colorFromTemp()
+                cellsFromTemp()
                 firstLedEntity = null
                 super.touchUp(event, x, y, pointer, button)
             }
@@ -130,6 +130,27 @@ open class LEDPannelEntity(val WIDTH: Int, val HEIGHT: Int): Table()
             it.forEach {
                 it.colorFromTemp()
             }
+        }
+    }
+    fun cellsFromTemp()
+    {
+        leds.forEach {
+            it.forEach {
+                it.cellFromTemp()
+            }
+        }
+    }
+    fun cellsToTemp()
+    {
+        leds.forEach {
+            it.forEach {
+                it.cellToTemp()
+            }
+        }
+    }
+    fun centerLabels() = leds.forEach {
+        it.forEach {
+            it.centerLabel()
         }
     }
 }

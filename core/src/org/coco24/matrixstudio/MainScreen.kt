@@ -19,15 +19,17 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Align
 import com.badlogic.gdx.utils.Array
 import com.badlogic.gdx.utils.viewport.ScreenViewport
+import com.kotcrab.vis.ui.FocusManager
 import com.kotcrab.vis.ui.VisUI
 import com.kotcrab.vis.ui.widget.*
 import com.kotcrab.vis.ui.widget.Tooltip
 import com.kotcrab.vis.ui.widget.color.ColorPicker
 import com.kotcrab.vis.ui.widget.color.ColorPickerAdapter
+import org.coco24.matrixstudio.LEDCell.ColorizedLEDCell
 import org.coco24.matrixstudio.MyGdxGame.R
 import java.lang.IllegalStateException
 
-class MainScreen: Screen, PagesSurface
+class MainScreen : Screen, PagesSurface, Tools.CellsFiller
 {
 
 
@@ -45,9 +47,11 @@ class MainScreen: Screen, PagesSurface
             (ledPannelScrollPane.actor as Table).invalidate()
             (ledPannelScrollPane.actor as Table).pack()
             ledPannelScrollPane.actor = ledPannelScrollPane.actor
+            ledPannel.centerLabels()
         }
-    var ledPannelTouchedDown = false
     lateinit var lightsToolsButtonGroup: ButtonGroup<VisImageButton>
+    val draggableWidgets = Array<Actor>()
+    val touchedHashMap = HashMap<Any, Boolean>()
     val stage = object : Stage(ScreenViewport())
     {
         val vector2 = Vector2()
@@ -65,18 +69,36 @@ class MainScreen: Screen, PagesSurface
 
         override fun touchDragged(screenX: Int, screenY: Int, pointer: Int): Boolean
         {
-            vector2.x = screenX.toFloat()
-            vector2.y = screenY.toFloat()
-            screenToStageCoordinates(vector2)
-            ledPannel.stageToLocalCoordinates(vector2)
-            if (ledPannelTouchedDown) (ledPannel.listeners[0] as InputListener).touchDragged(null, vector2.x, vector2.y, pointer)
+            draggableWidgets.forEach {
+                if(touchedHashMap.get(it) == true)
+                {
+                    vector2.x = screenX.toFloat()
+                    vector2.y = screenY.toFloat()
+                    screenToStageCoordinates(vector2)
+                    it.stageToLocalCoordinates(vector2)
+                    it.listeners.forEach {
+                        if(it is InputListener)
+                            it.touchDragged(null, vector2.x, vector2.y, pointer)
+                    }
+                }
+            }
             return super.touchDragged(screenX, screenY, pointer)
         }
 
         override fun touchUp(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean
         {
-            if (ledPannelTouchedDown) (ledPannel.listeners[0] as InputListener).touchUp(null, 0f, 0f, 0, 0)
-            ledPannelTouchedDown = false
+            draggableWidgets.forEach {
+                if(touchedHashMap.get(it) == true)
+                {
+                    it.listeners.forEach {
+                        if(it is InputListener)
+                        {
+                            it.touchUp(null, 0f, 0f, pointer, button)
+                        }
+                    }
+                }
+                touchedHashMap.put(it, false)
+            }
             return super.touchUp(screenX, screenY, pointer, button)
         }
 
@@ -106,7 +128,7 @@ class MainScreen: Screen, PagesSurface
     {
         override fun updateLed(x: Float, y: Float, touched: Boolean): LEDEntity?
         {
-            ledPannelTouchedDown = touched
+            touchedHashMap.put(this, touched)
             return super.updateLed(x, y, touched)
         }
 
@@ -118,77 +140,130 @@ class MainScreen: Screen, PagesSurface
     val tools = Array<Tools.Tool>()
     lateinit var lightsFrontColorImage: Image
     lateinit var lightsBackColorImage: Image
-    val pages = object : Array<LEDPage>()
+    fun newSeq(name: String): NamedArray<LEDPage>
     {
-        fun syncTotalFrames()
+        val array = object : NamedArray<LEDPage>(name)
         {
-            totalFrameLabel.setText(size.toString())
-        }
-        override fun add(value: LEDPage?)
-        {
-            super.add(value)
-            syncTotalFrames()
-        }
+            fun syncTotalFrames()
+            {
+                totalFrameLabel.setText(size.toString())
+            }
 
-        override fun removeIndex(index: Int): LEDPage
-        {
-            val ret = super.removeIndex(index)
-            syncTotalFrames()
-            return ret
-        }
+            override fun add(value: LEDPage?)
+            {
+                super.add(value)
+                syncTotalFrames()
+            }
 
-        override fun insert(index: Int, value: LEDPage?)
-        {
-            super.insert(index, value)
-            syncTotalFrames()
+            override fun removeIndex(index: Int): LEDPage
+            {
+                val ret = super.removeIndex(index)
+                syncTotalFrames()
+                return ret
+            }
+
+            override fun insert(index: Int, value: LEDPage?)
+            {
+                super.insert(index, value)
+                syncTotalFrames()
+            }
         }
+        array.add(LEDPage(pannelWidth, pannelHeight))
+        return array
     }
-
+    var currentSeq: NamedArray<LEDPage>
+    set(value)
+    {
+        currentSeqIndex = lightsSeqs.indexOf(value)
+    }
+    get()
+    {
+        return lightsSeqs[currentSeqIndex]
+    }
     var currentPageIndex = 0
         set(value)
         {
-            if (value >= 0 && value < pages.size) field = value
+            if (value >= 0 && value < currentSeq.size) field = value
         }
+    fun refreshLightsSeqsList()
+    {
+        lightsSeqList.clearItems()
+        val list = Array<String>()
+        lightsSeqs.forEach {
+            list.add(it.name)
+        }
+        lightsSeqList.setItems(list)
+    }
+    val lightsSeqs = object : Array<NamedArray<LEDPage>>()
+    {
+        override fun add(value: NamedArray<LEDPage>?)
+        {
+            super.add(value)
+            refreshLightsSeqsList()
+        }
+
+        override fun removeIndex(index: Int): NamedArray<LEDPage>
+        {
+            val ret = super.removeIndex(index)
+            refreshLightsSeqsList()
+            return ret
+        }
+
+        override fun insert(index: Int, value: NamedArray<LEDPage>?)
+        {
+            super.insert(index, value)
+            refreshLightsSeqsList()
+        }
+    }
+    var currentSeqIndex: Int = 0
+    set(value)
+    {
+        if(value >= 0 && value < lightsSeqs.size)
+            field = value
+//        lightsSeqList.selectedIndex = value
+    }
+//    get()
+//    {
+//        return lightsSeqList.selectedIndex
+//    }
 
     lateinit var totalFrameLabel: VisLabel
     lateinit var currentFrameTextField: VisTextField
+    lateinit var lightsSeqList: VisList<String>
 
     var ctrl = false
     var alt = false
     var shift = false
-    val frontColor = object : Color()
+    val frontColorizedLEDCell = LEDCell.PointedColorizedLEDCell(Color())
+    val backColorizedLEDCell = LEDCell.PointedColorizedLEDCell(Color())
+    val frontQueuedLEDCell = LEDCell.QueuedLEDCell()
+    val backQueuedLEDCell = LEDCell.QueuedLEDCell()
+    private var frontCell: LEDCell = frontColorizedLEDCell
+    set(value)
     {
-        override fun set(color: Color?): Color
-        {
-            lightsFrontColorImage.color = color
-            return super.set(color)
-        }
+        field = value
+        lightsFrontColorImage.color = value.color
     }
-    val backColor = object : Color()
+    private var backCell: LEDCell = backColorizedLEDCell
+    set(value)
     {
-        override fun set(color: Color?): Color
-        {
-            lightsBackColorImage.color = color
-            return super.set(color)
-        }
+        field = value
+        lightsBackColorImage.color = value.color
     }
-
+    override fun getFrontCell(): LEDCell = frontCell
+    override fun getBackCell(): LEDCell = backCell
     init
     {
-        tools.add(Tools.Pen(ledPannel, frontColor))
+        tools.add(Tools.Pen(ledPannel, this))
         tools.add(Tools.Eraser(ledPannel))
-        tools.add(Tools.Line(ledPannel, frontColor))
-        tools.add(Tools.Rectangle(ledPannel, frontColor, backColor))
-        tools.add(Tools.Bucket(ledPannel, frontColor))
+        tools.add(Tools.Line(ledPannel, this))
+        tools.add(Tools.Rectangle(ledPannel, this))
+        tools.add(Tools.Bucket(ledPannel, this))
     }
-
-
-
-    class LEDCell()
-    {
-        val color = Color(Color.BLACK)
-        fun setColor(newColor: Color) = color.set(newColor)
-    }
+//    interface LEDCell
+//    {
+//        fun getColor(): Color;
+//    }
 
     class LEDPage(private var width: Int, private var height: Int)
     {
@@ -201,7 +276,7 @@ class MainScreen: Screen, PagesSurface
                 val array = Array<LEDCell>()
                 for (j in 0 until width)
                 {
-                    array.add(LEDCell())
+                    array.add(ColorizedLEDCell())
                 }
                 leds.add(array)
             }
@@ -212,20 +287,18 @@ class MainScreen: Screen, PagesSurface
     }
 
 
-
     var currentPage: LEDPage
         get()
         {
-            return pages[currentPageIndex]
+            return currentSeq[currentPageIndex]
         }
         set(value)
         {
-            currentPageIndex = pages.indexOf(value)
+            currentPageIndex = currentSeq.indexOf(value)
         }
 
-    override fun changePage(page: Int)
+    fun changePage(page: Int)
     {
-
         pannelToPage()
         currentPageIndex = page
         pageToPannel()
@@ -233,18 +306,36 @@ class MainScreen: Screen, PagesSurface
         currentFrameTextField.text = (currentPageIndex + 1).toString()
         currentFrameTextField.isInputValid = true
     }
+    fun changeSeq(seq: Int)
+    {
+        if(!(seq in 0 until lightsSeqs.size))
+            return
+        pannelToPage()
+        currentPageIndex = 0
+        currentFrameTextField.text = (currentPageIndex + 1).toString()
+        currentSeqIndex = seq
+        totalFrameLabel.setText(currentSeq.size.toString())
+        pageToPannel()
+    }
+    override fun showPage(page: Int)
+    {
+        currentPageIndex = page
+        pageToPannel()
+        currentFrameTextField.text = (currentPageIndex + 1).toString()
+    }
+
     override fun getPagesSize(): Int
     {
-        return pages.size
+        return currentSeq.size
     }
 
     override fun getCurrentPage(): Int
     {
         return currentPageIndex
     }
-    fun pageToPannel() = syncPannelAndPage(true)
-    fun pannelToPage() = syncPannelAndPage(false)
-    private fun syncPannelAndPage(pageToPannel: Boolean)
+    fun pageToPannel() = sync(true)
+    fun pannelToPage() = sync(false)
+    fun sync(pageToPannel: Boolean)
     {
         val currentPage = currentPage
         if (currentPage.getWidth() == ledPannel.WIDTH && currentPage.getHeight() == ledPannel.HEIGHT)
@@ -253,28 +344,81 @@ class MainScreen: Screen, PagesSurface
             {
                 for (j in 0 until currentPage.getWidth())
                 {
-                    if (pageToPannel) ledPannel.leds[i][j].color = currentPage.leds[i][j].color
-                    else currentPage.leds[i][j].setColor(ledPannel.leds[i][j].color)
+                    if(pageToPannel)
+                    ledPannel.leds[i][j].ledCell = currentPage.leds[i][j]
+                    else currentPage.leds[i][j] = ledPannel.leds[i][j].ledCell
                 }
             }
-        }
-        else
+        } else
         {
             throw IllegalStateException("ERROR")
         }
     }
-
     enum class PlayerStatus
     {
         Playing, Paused, Stopped
     }
+
     val playerTweenManager = TweenManager()
     var playerStatus = PlayerStatus.Stopped
     var playerSpeed = 96
     val disabledWidgetsWhenPlaying = Array<Actor>()
+    lateinit var lightsQueueList: VisList<String>
+    fun refreshLightsQueue()
+    {
+        lightsQueueList.clearItems()
+        val nameArray = Array<String>()
+        lightsQueues.forEach {
+            nameArray.add(it.name)
+        }
+        lightsQueueList.setItems(nameArray)
+    }
+    val lightsQueues = object : Array<NamedQueue<LEDCell>>()
+    {
+
+        override fun add(value: NamedQueue<LEDCell>?)
+        {
+            super.add(value)
+            refreshLightsQueue()
+        }
+        override fun removeIndex(index: Int): NamedQueue<LEDCell>?
+        {
+            if(!(index in 0 until size))
+                return null
+            val ret = super.removeIndex(index)
+            refreshLightsQueue()
+            return ret
+        }
+
+        override fun insert(index: Int, value: NamedQueue<LEDCell>?)
+        {
+            super.insert(index, value)
+            refreshLightsQueue()
+        }
+    }
+    var currentLightsQueuesIndex: Int
+    set(value)
+    {
+        lightsQueueList.selectedIndex = value
+    }
+    get()
+    {
+        return lightsQueueList.selectedIndex
+    }
+    var currentLightsQueue: NamedQueue<LEDCell>?
+    set(value)
+    {
+        currentLightsQueuesIndex = lightsQueues.indexOf(value)
+    }
+    get()
+    {
+        if(currentLightsQueuesIndex in 0 until lightsQueues.size)
+        return lightsQueues[currentLightsQueuesIndex]
+        else return null
+    }
     override fun show()
     {
-        val tableBackground = (VisUI.getSkin().get(VisImageButton.VisImageButtonStyle::class.java).up as NinePatchDrawable).tint(if(R.PPI < 128) Color.WHITE else Color.LIGHT_GRAY)
+        val tableBackground = (VisUI.getSkin().get(VisImageButton.VisImageButtonStyle::class.java).up as NinePatchDrawable).tint(if (R.PPI < 128) Color.WHITE else Color.LIGHT_GRAY)
 
         val rootTable = Table()
         run {
@@ -299,7 +443,61 @@ class MainScreen: Screen, PagesSurface
                 }
                 val editMenu = Menu("编辑");
                 run {
+                    fun offsetCurrentPageQueuedIndex(offset: Int)
+                    {
+                        currentPage.leds.forEach {
+                            it.forEach {
+                                if(it is LEDCell.QueuedLEDCell)
+                                {
+                                    it.ledsQueueOffset += offset
+                                }
+                            }
+                        }
+                    }
+                    val subQueueOffsetMenuItem = MenuItem("前移序列")
+                    subQueueOffsetMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            offsetCurrentPageQueuedIndex(-1)
+                            pageToPannel()
+                        }
+                    })
 
+                    val addQueueOffsetMenuItem = MenuItem("后移序列")
+                    addQueueOffsetMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            offsetCurrentPageQueuedIndex(1)
+                            pageToPannel()
+                        }
+                    })
+
+                    val convertAllQueuedLedCell = MenuItem("移除所有序列编号")
+                    convertAllQueuedLedCell.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            currentSeq.forEach {
+                                it.leds.forEach {
+                                    for(i in 0 until it.size)
+                                    {
+                                        val ledCell = it[i]
+                                        if(ledCell is LEDCell.QueuedLEDCell)
+                                        {
+                                            it[i] = ledCell.toColorizedLEDCell()
+                                        }
+                                    }
+                                }
+                            }
+                            pageToPannel()
+                        }
+                    })
+                    editMenu.addItem(subQueueOffsetMenuItem)
+                    editMenu.addItem(addQueueOffsetMenuItem)
+                    editMenu.addSeparator()
+                    editMenu.addItem(convertAllQueuedLedCell)
                 }
                 val viewMenu = Menu("视图")
                 run {
@@ -371,24 +569,26 @@ class MainScreen: Screen, PagesSurface
                 menuBar.addMenu(deviceMenu);
                 menuBar.addMenu(helpMenu);
             }
+
             val subMenuBar = VisTable()
             run {
                 val subMenuBarLeftTable = VisTable()
                 subMenuBarLeftTable.add("选择设备：").expandX()
                 val deviceSelectBox = VisSelectBox<String>()
-                deviceSelectBox.setItems("Launchpad MKII", "设备2", "设备3")
+                deviceSelectBox.setItems("Virtual Matrix")
                 subMenuBarLeftTable.add(deviceSelectBox).minWidth(200f * R.SCALE)
                 val playerControllerSpeedTextField = VisTextField("96")
                 playerControllerSpeedTextField.textFieldFilter = object : VisTextField.TextFieldFilter.DigitsOnlyFilter()
                 {
                     override fun acceptChar(textField: VisTextField, c: Char): Boolean
                     {
-                        if(super.acceptChar(textField, c))
+                        if (super.acceptChar(textField, c))
                         {
                             return true
-                        }else
+                        } else
                         {
-                            playerSpeed = textField.text.toIntOrNull()?:0
+                            playerSpeed = textField.text.toIntOrNull() ?: 0
+                            FocusManager.resetFocus(stage)
                             return false
                         }
                     }
@@ -402,13 +602,14 @@ class MainScreen: Screen, PagesSurface
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
+                        pannelToPage()
                         playerStatus = PlayerStatus.Playing
                         Gdx.graphics.isContinuousRendering = true
                         playerControllerSpeedTextField.textFieldFilter.acceptChar(playerControllerSpeedTextField, '\n')
                         playerTweenManager.killAll()
                         Timeline.createSequence()
                                 .push(Tween.set(this@MainScreen, 0).target(0f))
-                                .push(Tween.to(this@MainScreen, 0, 1f).target(pages.size - 0.00001f).ease(Linear.INOUT))
+                                .push(Tween.to(this@MainScreen, 0, 1f).target(currentSeq.size - 0.00001f).ease(Linear.INOUT))
                                 .repeat(Tween.INFINITY, 0f).start(playerTweenManager)
                         disabledWidgetsWhenPlaying.forEach {
                             setTouchable(it, Touchable.disabled)
@@ -426,7 +627,7 @@ class MainScreen: Screen, PagesSurface
                         Gdx.graphics.isContinuousRendering = false
                         playerTweenManager.killAll()
                         disabledWidgetsWhenPlaying.forEach {
-                            setTouchable(it, Touchable.childrenOnly)
+                            setTouchable(it, Touchable.enabled)
                         }
                     }
                 })
@@ -440,7 +641,6 @@ class MainScreen: Screen, PagesSurface
                 subMenuBar.pack()
             }
 
-
             val mainTable = Table()
             run {
                 val mainMultiSplitPane = MultiSplitPane(false)
@@ -449,25 +649,156 @@ class MainScreen: Screen, PagesSurface
                     run {
                         val lightsSeqTable = VisTable()
                         run {
-                            lightsSeqTable.add("灯光片段").left().row()
-                            val lightsSeqList = VisList<String>()
-                            lightsSeqList.setItems("灯光1", "灯光2", "灯光3")
-                            lightsSeqTable.add(lightsSeqList).expand().top().fillX().row()
+                            lightsSeqTable.add("灯光片段").left()
+                            val buttonsTable = VisTable()
+                            val addLightsSeqButton = VisTextButton("+")
+                            addLightsSeqButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    val nameWindow = Windows.TextRequiredWindow()
+                                    nameWindow.callback = object : Windows.BooleanCallback
+                                    {
+                                        override fun callback(result: Boolean)
+                                        {
+                                            if(result)
+                                            {
+                                                lightsSeqs.add(newSeq(nameWindow.text))
+                                            }
+                                        }
+                                    }
+                                    stage.addActor(nameWindow)
+                                    nameWindow.fadeIn()
+                                }
+                            })
+                            val editLightsSeqButton = VisTextButton("E")
+                            editLightsSeqButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    val nameWindow = Windows.TextRequiredWindow("编辑名称", currentSeq.name)
+                                    nameWindow.callback = object : Windows.BooleanCallback
+                                    {
+                                        override fun callback(result: Boolean)
+                                        {
+                                            if(result)
+                                            {
+                                                currentSeq.name = nameWindow.text
+                                                refreshLightsSeqsList()
+                                            }
+                                        }
+                                    }
+                                    stage.addActor(nameWindow)
+                                    nameWindow.fadeIn()
+                                }
+                            })
+                            val deleteLightsSeqButton = VisTextButton("×")
+                            deleteLightsSeqButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    if(lightsSeqs.size > 1)
+                                    {
+                                        lightsSeqs.removeIndex(currentSeqIndex)
+                                    }
+                                }
+                            })
+                            buttonsTable.add(addLightsSeqButton)
+                            buttonsTable.add(editLightsSeqButton)
+                            buttonsTable.add(deleteLightsSeqButton)
+                            buttonsTable.pack()
+                            lightsSeqTable.add(buttonsTable).row()
+                            lightsSeqList = VisList<String>()
+                            lightsSeqList.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    changeSeq(lightsSeqList.selectedIndex)
+                                }
+                            })
+                            lightsSeqTable.add(lightsSeqList).colspan(2).expand().top().fillX().row()
                             lightsSeqTable.cells.forEach {
                                 it.pad(5f * R.SCALE)
                             }
                             lightsSeqTable.pack()
                         }
-                        val lightsPatternTable = VisTable()
+                        val lightsQueueTable = VisTable()
                         run {
-                            lightsPatternTable.add("颜色配置").left().row()
-                            val lightsPatternList = VisList<String>()
-                            lightsPatternList.setItems("Launchpad MKII/Pro", "Launchpad S")
-                            lightsPatternTable.add(lightsPatternList).expand().top().fillX().row()
-                            lightsPatternTable.cells.forEach {
+                            lightsQueueList = VisList<String>()
+                            lightsQueueList.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    if(lightsQueueList.selectedIndex >= 0)
+                                    frontQueuedLEDCell.ledsQueue = lightsQueues[lightsQueueList.selectedIndex]
+                                }
+                            })
+                            lightsQueueTable.add("灯光序列").left()
+                            val buttonsTable = VisTable()
+
+                            val addLightsQueueButton = VisTextButton("+")
+                            addLightsQueueButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    val queueEditor = LEDQueueEditor()
+                                    queueEditor.callback = object : Windows.BooleanCallback
+                                    {
+                                        override fun callback(result: Boolean)
+                                        {
+                                            if(result)
+                                            {
+                                                lightsQueues.add(queueEditor.ledQueue)
+                                            }
+                                        }
+                                    }
+                                    stage.addActor(queueEditor)
+                                    queueEditor.fadeIn()
+                                }
+                            })
+                            val editLightsQueueButton = VisTextButton("E")
+                            editLightsQueueButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    val queueEditor = LEDQueueEditor(Utils.copyNamedQueue(currentLightsQueue?:return))
+                                    queueEditor.callback = object : Windows.BooleanCallback
+                                    {
+                                        override fun callback(result: Boolean)
+                                        {
+                                            if(result)
+                                            {
+                                                Utils.copyNamedQueue(queueEditor.ledQueue, currentLightsQueue?:return)
+                                                refreshLightsQueue()
+                                            }
+                                        }
+                                    }
+                                    stage.addActor(queueEditor)
+                                    queueEditor.fadeIn()
+                                }
+                            })
+                            val deleteLightsQueueButton = VisTextButton("×")
+                            deleteLightsQueueButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    if(frontCell == frontQueuedLEDCell && frontQueuedLEDCell.ledsQueue == currentLightsQueue)
+                                        frontCell = frontColorizedLEDCell
+                                    if(backCell == backQueuedLEDCell && backQueuedLEDCell.ledsQueue == currentLightsQueue)
+                                        backCell = backColorizedLEDCell
+                                    lightsQueues.removeIndex(currentLightsQueuesIndex)
+                                }
+                            })
+                            buttonsTable.add(addLightsQueueButton)
+                            buttonsTable.add(editLightsQueueButton)
+                            buttonsTable.add(deleteLightsQueueButton)
+                            lightsQueueTable.add(buttonsTable).row()
+
+                            lightsQueueTable.add(lightsQueueList).colspan(2).expand().top().fillX().row()
+                            lightsQueueTable.cells.forEach {
                                 it.pad(5f * R.SCALE)
                             }
-                            lightsPatternTable.pack()
+                            lightsQueueTable.pack()
                         }
                         val lightsToolsTable = VisTable()
                         run {
@@ -492,6 +823,7 @@ class MainScreen: Screen, PagesSurface
                             }
                             lightsToolsTable.pack()
                         }
+
                         val lightsColorTable = VisTable()
                         run {
                             val colorPixmap = Pixmap(1, 1, Pixmap.Format.RGB888)
@@ -515,30 +847,30 @@ class MainScreen: Screen, PagesSurface
                             }
                             val lightsFrontColor = VisImageButton("default")
                             lightsFrontColorImage = Image(colorDrawable)
-                            frontColor.set(Color.RED)
-                            lightsFrontColorImage.color = frontColor
+                            frontColorizedLEDCell.setColor(Color.RED)
+                            frontCell = frontColorizedLEDCell
                             lightsFrontColor.add(lightsFrontColorImage)
                             lightsFrontColor.pack()
                             lightsFrontColor.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
                                 {
-                                    changeColor(frontColor)
+                                    changeCell(frontCell)
                                 }
                             })
                             lightsFrontColor.background = VisUI.getSkin().get(VisTextButton.VisTextButtonStyle::class.java).focusBorder
                             val lightsBackColor = VisImageButton("default")
                             lightsBackColorImage = Image(colorDrawable)
 
-                            backColor.set(Color.WHITE)
-                            lightsBackColorImage.color = backColor
+                            backColorizedLEDCell.setColor(Color.WHITE)
+                            backCell = backColorizedLEDCell
                             lightsBackColor.add(lightsBackColorImage)
                             lightsBackColor.pack()
                             lightsBackColor.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
                                 {
-                                    changeColor(backColor)
+                                    changeCell(backCell)
                                 }
                             })
                             lightsColorStack.addActor(lightsBackColor)
@@ -549,18 +881,19 @@ class MainScreen: Screen, PagesSurface
                             lightsColorTable.add(lightsColorStack).expand().top()
                             lightsColorTable.pack()
                         }
-                        mainLeftSplitPane.setWidgets(lightsToolsTable, lightsColorTable, lightsPatternTable, lightsSeqTable)
+                        mainLeftSplitPane.setWidgets(lightsToolsTable, lightsColorTable, lightsQueueTable, lightsSeqTable)
                         mainLeftSplitPane.setSplit(0, 0.125f)
                         mainLeftSplitPane.setSplit(1, 0.25f)
                         mainLeftSplitPane.pack()
 
                         setBackground(mainLeftSplitPane, tableBackground)
                     }
-
+                    disabledWidgetsWhenPlaying.add(mainLeftSplitPane)
                     val ledPannelTable = VisTable()
                     run {
                         ledPannelTable.add(ledPannel).maxSize(pannelSize).pad(100f).expand().center()
                         ledPannelTable.pack()
+                        draggableWidgets.add(ledPannel)
                         ledPannelScrollPane = VisScrollPane(ledPannelTable)
                         ledPannelScrollPane.listeners.removeIndex(1)
                         ledPannelScrollPane.addListener(object : InputListener()
@@ -570,8 +903,7 @@ class MainScreen: Screen, PagesSurface
                                 if (ctrl)
                                 {
                                     pannelSize -= amount * 20f
-                                }
-                                else
+                                } else
                                 {
                                     if (ledPannelScrollPane.isScrollY) ledPannelScrollPane.scrollY += 80 * amount
                                     else if (ledPannelScrollPane.isScrollX) //
@@ -592,6 +924,7 @@ class MainScreen: Screen, PagesSurface
                 }
                 mainTable.pack()
             }
+
             val bottomMenuBar = VisTable()
             run {
                 val timeLineControllerTable = VisTable()
@@ -603,31 +936,39 @@ class MainScreen: Screen, PagesSurface
                 currentFrameTextField.setAlignment(Align.center)
                 val addFrameButton = VisTextButton("+")
                 currentFrameTextField.textFieldFilter = VisTextField.TextFieldFilter { textField, c ->
-                    if (c.isWhitespace())
+                    if (c.isDigit())
+                        true
+                    else
                     {
-                        val page = textField.text.toIntOrNull() ?: -1-1
-                        changePage(page)
-                        textField.isInputValid = !(page < 0 || page >= pages.size)
+                        val page = textField.text.toIntOrNull() ?: 0
+                        changePage(page - 1)
+                        textField.isInputValid = !(page < 0 || page >= currentSeq.size)
+                        FocusManager.resetFocus(stage)
+                        false
                     }
-                    c.isDigit()
+
                 }
                 val deleteFrameButton = VisTextButton("×")
                 deleteFrameButton.addListener(object : ChangeListener()
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
-                        if(pages.size > 1)
+                        if (currentSeq.size > 1)
                         {
-                            pages.removeIndex(currentPageIndex)
-                            currentPageIndex --
+                            currentSeq.removeIndex(currentPageIndex)
+                            currentPageIndex--
                             currentFrameTextField.text = (currentPageIndex + 1).toString()
                             pageToPannel()
-                        }
-                        else
+                        } else
                         {
-                            currentPage.leds.forEach {
-                                it.forEach {
-                                    it.setColor(Color.BLACK)
+                            for(i in 0 until currentPage.leds.size)
+                            {
+                                for(j in 0 until currentPage.leds[0].size)
+                                {
+                                    val it = currentPage.leds[i][j]
+                                    if(it is ColorizedLEDCell)
+                                        it.setColor(Color.BLACK)
+                                    else currentPage.leds[i][j] = ColorizedLEDCell()
                                 }
                             }
                             pageToPannel()
@@ -639,19 +980,7 @@ class MainScreen: Screen, PagesSurface
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
-                        pannelToPage()
-                        val page = LEDPage(pannelWidth, pannelHeight)
-                        val currentPage = currentPage
-                        for(i in 0 until pannelHeight)
-                        {
-                            for(j in 0 until pannelHeight)
-                            {
-                                page.leds[i][j].setColor(currentPage.leds[i][j].color)
-                            }
-                        }
-                        pages.insert(currentPageIndex, page)
-                        currentFrameTextField.text = (++ currentPageIndex + 1).toString()
-                        pageToPannel()
+                        duplicatePage()
                     }
                 })
                 previousFrameButton.addListener(object : ChangeListener()
@@ -672,9 +1001,8 @@ class MainScreen: Screen, PagesSurface
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
-                        val index = pages.size
-                        pages.add(LEDPage(pannelWidth, pannelHeight))
-                        changePage(index)
+                        currentSeq.insert(currentPageIndex + 1, LEDPage(pannelWidth, pannelHeight))
+                        changePage(currentPageIndex + 1)
                     }
                 })
                 timeLineControllerTable.add(previousFrameButton)
@@ -702,70 +1030,154 @@ class MainScreen: Screen, PagesSurface
             bottomMenuBar.background = tableBackground
             menuBar.table.background = tableBackground
         }
+        lightsSeqs.add(newSeq("新建灯光片段"))
 
         Gdx.input.inputProcessor = stage;
 
         (stage.viewport as ScreenViewport).unitsPerPixel = R.unitsPerPixel
-        pages.add(LEDPage(pannelWidth, pannelHeight))
         changePage(0)
+
+        val rainbowQueue = NamedQueue<LEDCell>()
+        rainbowQueue.name = "彩虹渐变"
+        //TODO：背景色新建对象
+        for(h in 0 .. 360 step 30)
+        {
+            val color = Color(Color.WHITE)
+            rainbowQueue.addLast(ColorizedLEDCell(color.fromHsv(h.toFloat(), 1f, 1f)))
+        }
+        lightsQueues.add(rainbowQueue)
+    }
+
+    private fun duplicatePage()
+    {
+        pannelToPage()
+        val page = LEDPage(pannelWidth, pannelHeight)
+        val currentPage = currentPage
+        for (i in 0 until pannelHeight)
+        {
+            for (j in 0 until pannelHeight)
+            {
+                page.leds[i][j] = currentPage.leds[i][j].clone() as LEDCell
+                val led = page.leds[i][j]
+                if (led is LEDCell.QueuedLEDCell)
+                    led.ledsQueueOffset++
+                //TODO: 移除
+                //TODO: offset设置
+                //TODO: SmartInsert
+                //TODO: 池
+            }
+        }
+        currentSeq.insert(currentPageIndex + 1, page)
+        changePage(currentPageIndex + 1)
     }
 
     fun setBackground(actor: Actor, background: Drawable)
     {
-        if(actor is Table)
+        if (actor is Table)
             actor.setBackground(background)
-        else if(actor is WidgetGroup)
+        else if (actor is WidgetGroup)
             actor.children.forEach { setBackground(it, background) }
 
     }
-    fun setTouchable(actor: Actor,touchable: Touchable)
+
+    fun setTouchable(actor: Actor, touchable: Touchable)
     {
-        actor.touchable = touchable
-        if(actor is Button)
+        actor.touchable =
+                if (touchable == Touchable.enabled)
+                    if (actor is WidgetGroup) Touchable.childrenOnly
+                    else Touchable.enabled
+                else touchable
+        if (actor is Button)
         {
             actor.isDisabled = touchable == Touchable.disabled
-        }
-        else if(actor is WidgetGroup)
+        } else if (actor is WidgetGroup)
             actor.children.forEach { setTouchable(it, touchable) }
     }
-    fun changeColor(color: Color)
+
+    fun changeCell(mLedCell: LEDCell)
     {
-        var _colorPicker: ColorPicker? = null
-        val colorPicker = ColorPicker(if(color == frontColor) "选择前景色" else "选择背景色", object : ColorPickerAdapter()
+        val front = mLedCell.hashCode() == frontCell.hashCode()
+        val cellTypePopupMenu = PopupMenu()
+        val cellTypeColorizedMenuItem = MenuItem("颜色")
+        val cellTypeQueuedMenuItem = MenuItem("序列")
+        cellTypePopupMenu.addItem(cellTypeColorizedMenuItem)
+        cellTypePopupMenu.addItem(cellTypeQueuedMenuItem)
+        cellTypePopupMenu.showMenu(stage, if(front) lightsFrontColorImage else lightsBackColorImage)
+        cellTypeColorizedMenuItem.addListener(object: ChangeListener()
         {
-            override fun finished(newColor: Color?)
+            override fun changed(event: ChangeEvent?, actor: Actor?)
             {
-                if(newColor == null) return
-                color.set(newColor)
-                _colorPicker?.remove()
+                val ledCell = if(front) frontColorizedLEDCell  else backColorizedLEDCell
+                var _colorPicker: ColorPicker? = null
+                val colorPicker = ColorPicker(if (front) "选择前景色" else "选择背景色", object : ColorPickerAdapter()
+                {
+                    override fun finished(newColor: Color?)
+                    {
+                        if (newColor == null) return
+                        ledCell.setColor(newColor)
+                        _colorPicker?.remove()
+                        if (front)
+                            frontCell = ledCell
+                        else backCell = ledCell
+                    }
+                })
+                var loopCount = 0
+                (colorPicker.cells[colorPicker.cells.size - 1].actor as Table).cells.forEach {
+                    val button = it.actor
+                    if (button is VisTextButton)
+                    {
+                        button.setText(when ("${button.text}")
+                        {
+                            "OK" -> "确定"
+                            "Cancel" -> "取消"
+                            "Restore" -> "重置"
+                            else -> ""
+                        })
+                    }
+                    loopCount++
+                }
+                _colorPicker = colorPicker
+                colorPicker.color = ledCell.color
+                stage.addActor(colorPicker)
             }
         })
-        var loopCount = 0
-        (colorPicker.cells[colorPicker.cells.size - 1].actor as Table).cells.forEach {
-            val button = it.actor
-            if(button is VisTextButton)
+        cellTypeQueuedMenuItem.addListener(object : ChangeListener()
+        {
+            override fun changed(event: ChangeEvent?, actor: Actor?)
             {
-                button.setText(when("${button.text}")
+                if(lightsQueues.size == 0) return
+                val offsetInputWindow = Windows.NumberRequiredWindow("请输入序列起始编号", (if(front) frontQueuedLEDCell else backQueuedLEDCell).ledsQueueOffset , true, true)
+                offsetInputWindow.callback = object : Windows.BooleanCallback
                 {
-                    "OK" -> "确定"
-                    "Cancel" -> "取消"
-                    "Restore" -> "重置"
-                    else -> ""
-                })
+                    override fun callback(result: Boolean)
+                    {
+                        if(result)
+                        {
+                            if(front)
+                            {
+                                frontQueuedLEDCell.ledsQueue = currentLightsQueue
+                                frontQueuedLEDCell.ledsQueueOffset = offsetInputWindow.number
+                                frontCell = frontQueuedLEDCell
+                            }
+                            else{
+                                backQueuedLEDCell.ledsQueue = currentLightsQueue
+                                backQueuedLEDCell.ledsQueueOffset = offsetInputWindow.number
+                                backCell = backQueuedLEDCell
+                            }
+                        }
+                    }
+                }
+                stage.addActor(offsetInputWindow)
+                offsetInputWindow.fadeIn()
             }
-            loopCount ++
-        }
-        _colorPicker = colorPicker
-        colorPicker.color = color
-        stage.addActor(colorPicker)
-
-
+        })
 
     }
+
     override fun render(delta: Float)
     {
         stage.act();
-        playerTweenManager.update(Gdx.graphics.deltaTime * playerSpeed / 8 / pages.size)
+        playerTweenManager.update(Gdx.graphics.deltaTime * playerSpeed / 8 / currentSeq.size)
         stage.draw();
     }
 
@@ -777,15 +1189,190 @@ class MainScreen: Screen, PagesSurface
     override fun resume()
     {
     }
+
     override fun resize(width: Int, height: Int)
     {
         if (width == 0 && height == 0) return  //see https://github.com/libgdx/libgdx/issues/3673#issuecomment-177606278
         stage.viewport.update(width, height, true)
     }
+
     override fun dispose()
     {
     }
+
     override fun hide()
     {
+    }
+
+    open inner class LEDQueueEditor(val ledQueue: NamedQueue<LEDCell> = NamedQueue()) : VisWindow("编辑灯光序列")
+    {
+        var callback: Windows.BooleanCallback? = null
+        init
+        {
+            val ledTexture = Texture("led.png")
+            val rootTable = VisTable()
+            run {
+                val addButton = VisTextButton("+")
+                val addFrontButton = VisTextButton("+")
+                val removeFrontButton = VisTextButton("×")
+                val removeButton = VisTextButton("×")
+                val buttonsTable = VisTable()
+
+                val ledsTable = VisTable()
+                val ledsScrollPane = VisScrollPane(ledsTable)
+                ledsScrollPane.setFadeScrollBars(false)
+                ledsScrollPane.setFlickScroll(false)
+                fun updateTable()
+                {
+                    ledsTable.pack()
+                    ledsScrollPane.invalidate()
+                    ledsScrollPane.pack()
+                    ledsScrollPane.actor = ledsScrollPane.actor
+                    rootTable.pack()
+                }
+                fun addLedEntity(ledCell: LEDCell)
+                {
+                    val led = LEDEntity(ledTexture)
+                    ledsTable.add(led).size(32f * R.SCALE)
+                    led.ledCell = ledCell
+                    led.addListener(object : InputListener()
+                    {
+                        override fun touchDown(event: InputEvent?, x: Float, y: Float, pointer: Int, button: Int): Boolean
+                        {
+                            led.color = frontColorizedLEDCell.color
+                            return true
+                        }
+                    })
+                }
+                ledQueue.forEach {
+                    addLedEntity(it)
+                }
+                addFrontButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        val ledCell = ColorizedLEDCell()
+                        ledQueue.addFirst(ledCell)
+                        ledsTable.clearChildren()
+                        ledQueue.forEach {
+                            addLedEntity(it)
+                        }
+                        updateTable()
+                    }
+                })
+                addButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        val ledCell = ColorizedLEDCell()
+                        ledQueue.addLast(ledCell)
+                        addLedEntity(ledCell)
+                        updateTable()
+                    }
+                })
+                removeFrontButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        if(ledQueue.size == 0) return
+                        ledQueue.removeFirst()
+                        ledsTable.clearChildren()
+                        ledQueue.forEach {
+                            addLedEntity(it)
+                        }
+                        updateTable()
+                    }
+                })
+                removeButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        if(ledQueue.size == 0) return
+                        ledQueue.removeLast()
+                        ledsTable.clearChildren()
+                        ledQueue.forEach {
+                            addLedEntity(it)
+                        }
+                        updateTable()
+                    }
+                })
+                val duplicateAllButton = VisTextButton("C")
+                duplicateAllButton.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        val leds = Array<LEDCell>()
+                        ledQueue.forEach {
+                            val cell = ColorizedLEDCell(it.color)
+                            addLedEntity(cell)
+                            leds.add(cell)
+                        }
+                        leds.forEach {
+                            ledQueue.addLast(it)
+                        }
+                    }
+                })
+                buttonsTable.add(addFrontButton)
+                buttonsTable.add(removeFrontButton)
+                buttonsTable.add(duplicateAllButton)
+                buttonsTable.add(removeButton)
+                buttonsTable.add(addButton)
+                buttonsTable.pack()
+                rootTable.add(buttonsTable).row()
+                rootTable.add(ledsScrollPane).size(500f * R.SCALE, 64f * R.SCALE).row()
+                val ynButtonsTable = Windows.createBooleanButtonsTable(object : Windows.BooleanCallback
+                {
+                    override fun callback(result: Boolean)
+                    {
+                        if(ledQueue.size == 0)
+                        {
+                            callback?.callback(false)
+                            fadeOut()
+                            return
+                        }
+                        if (result)
+                        {
+                            val nameWindow = Windows.TextRequiredWindow(text = ledQueue.name)
+                            nameWindow.callback = object : Windows.BooleanCallback
+                            {
+                                override fun callback(confirmed: Boolean)
+                                {
+                                    if (confirmed)
+                                    {
+                                        ledQueue.name = nameWindow.text
+                                        callback?.callback(true)
+                                        fadeOut()
+                                    }
+                                }
+                            }
+                            stage.addActor(nameWindow)
+                            nameWindow.fadeIn()
+                        } else
+                        {
+                            callback?.callback(false)
+                            fadeOut()
+                        }
+                    }
+                })
+                rootTable.add(ynButtonsTable).expand().fillX()
+                rootTable.pack()
+
+                add(rootTable)
+                pack()
+            }
+            addCloseButton()
+            centerWindow ()
+        }
+
+        override fun fadeIn(time: Float): VisWindow
+        {
+            //TODO: 替换私有颜色选择器
+            frontCell = frontColorizedLEDCell
+            return super.fadeIn(time)
+        }
+        open fun finish()
+        {
+
+        }
     }
 }

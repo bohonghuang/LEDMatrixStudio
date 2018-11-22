@@ -12,7 +12,7 @@ interface PagesSurface
             {
                 val page = newValues[0].toInt()
                 if(page != target.getCurrentPage())
-                target.changePage(page)
+                target.showPage(page)
             }
 
             override fun getValues(target: PagesSurface, type: Int, values: FloatArray): Int
@@ -27,7 +27,7 @@ interface PagesSurface
 
         }
     }
-    fun changePage(page: Int);
+    fun showPage(page: Int);
     fun getPagesSize(): Int;
     fun getCurrentPage(): Int;
 }

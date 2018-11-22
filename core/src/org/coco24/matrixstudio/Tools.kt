@@ -19,8 +19,15 @@ object Tools
         val optionsTable = VisTable()
         abstract fun operate(sourceLedEntity: LEDEntity?, ledEntity: LEDEntity)
     }
-    class Pen(ledPannelEntity: LEDPannelEntity, val frontColor: Color): Tool(ledPannelEntity)
+    interface CellsFiller
     {
+        fun getFrontCell(): LEDCell;
+        fun getBackCell(): LEDCell;
+    }
+    class Pen(ledPannelEntity: LEDPannelEntity, val cellsFiller: CellsFiller): Tool(ledPannelEntity)
+    {
+        val frontCell: LEDCell
+        get() = cellsFiller.getFrontCell()
         init
         {
             name = "笔工具"
@@ -28,7 +35,7 @@ object Tools
         }
         override fun operate(sourceLedEntity: LEDEntity?, ledEntity: LEDEntity)
         {
-            ledEntity.setTempColor(frontColor)
+            ledEntity.tempLedCell = frontCell.clone() as LEDCell
         }
     }
     class Eraser(ledPannelEntity: LEDPannelEntity): Tool(ledPannelEntity)
@@ -40,11 +47,15 @@ object Tools
         }
         override fun operate(sourceLedEntity: LEDEntity?, ledEntity: LEDEntity)
         {
-            ledEntity.setTempColor(Color.BLACK)
+            ledEntity.tempLedCell = LEDCell.ColorizedLEDCell()
         }
     }
-    class Rectangle(ledPannelEntity: LEDPannelEntity, val frontColor: Color, val backColor: Color): Tool(ledPannelEntity)
+    class Rectangle(ledPannelEntity: LEDPannelEntity, val cellsFiller: CellsFiller): Tool(ledPannelEntity)
     {
+        val frontCell: LEDCell
+        get() = cellsFiller.getFrontCell()
+        val backCell: LEDCell
+        get() = cellsFiller.getBackCell()
         init
         {
             name = "矩形工具"
@@ -63,11 +74,11 @@ object Tools
                 {
                     if((x in fx..tx || x in tx .. fx)&& (y in fy..ty || y in ty .. fy))
                     {
-                        leds[y][x].setTempColor(frontColor)
+                        leds[y][x].tempLedCell = frontCell.clone() as LEDCell
                     }
                     else
                     {
-                        ledPannelEntity.leds[y][x].setTempColor(leds[y][x].image.color)
+                        ledPannelEntity.leds[y][x].tempLedCell = ledPannelEntity.leds[y][x].ledCell
                     }
                 }
             }
@@ -75,8 +86,10 @@ object Tools
     }
     fun min(a: Int, b: Int) = if(a < b) a else b
     fun max(a: Int, b: Int) = if(a > b) a else b
-    class Line(ledPannelEntity: LEDPannelEntity, val frontColor: Color): Tool(ledPannelEntity)
+    class Line(ledPannelEntity: LEDPannelEntity, val cellsFiller: CellsFiller): Tool(ledPannelEntity)
     {
+        val frontCell: LEDCell
+            get() = cellsFiller.getFrontCell()
         init
         {
             name = "线段工具"
@@ -102,18 +115,20 @@ object Tools
                 {
                     if(pixmap.getPixel(x, y) == Color.WHITE.toIntBits())
                     {
-                        ledPannelEntity.leds[y][x].setTempColor(frontColor)
+                        ledPannelEntity.leds[y][x].tempLedCell = frontCell.clone() as LEDCell
                     }
                     else
                     {
-                        ledPannelEntity.leds[y][x].setTempColor(ledPannelEntity.leds[y][x].image.color)
+                        ledPannelEntity.leds[y][x].tempLedCell = ledPannelEntity.leds[y][x].ledCell
                     }
                 }
             }
         }
     }
-    class Bucket(ledPannelEntity: LEDPannelEntity, val frontColor: Color): Tool(ledPannelEntity)
+    class Bucket(ledPannelEntity: LEDPannelEntity, val cellsFiller: CellsFiller): Tool(ledPannelEntity)
     {
+        val frontCell: LEDCell
+            get() = cellsFiller.getFrontCell()
         init
         {
             name = "油漆桶工具"
@@ -136,7 +151,7 @@ object Tools
             do
             {
                 currentLedEntity = fillQueue.pop()
-                currentLedEntity.setTempColor(frontColor)
+                currentLedEntity.tempLedCell = frontCell.clone() as LEDCell
                 filledLeds[currentLedEntity.pannelY][currentLedEntity.pannelX] = true
                 directions.forEach {
                     val y = currentLedEntity.pannelY + it[1]
@@ -144,7 +159,7 @@ object Tools
                     if(x in 0 until ledPannelEntity.WIDTH && y in 0 until ledPannelEntity.HEIGHT)
                     {
                         val sideLed = ledPannelEntity.leds[y][x]
-                        if(sideLed.image.color == ledEntity.image.color && !filledLeds[sideLed.pannelY][sideLed.pannelX])
+                        if(sideLed.ledCell == ledEntity.ledCell && !filledLeds[sideLed.pannelY][sideLed.pannelX])
                         {
                             fillQueue.push(sideLed)
                         }
@@ -154,7 +169,7 @@ object Tools
             for(y in 0 until ledPannelEntity.HEIGHT)
                 for(x in 0 until ledPannelEntity.WIDTH)
                     if(!filledLeds[y][x])
-                        ledPannelEntity.leds[y][x].setTempColor(ledPannelEntity.leds[y][x].image.color)
+                        ledPannelEntity.leds[y][x].tempLedCell = ledPannelEntity.leds[y][x].ledCell
         }
 
     }

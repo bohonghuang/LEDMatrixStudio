@@ -217,7 +217,7 @@ public class MyTable extends Table
     @Override
     public void draw(Batch batch, float parentAlpha)
     {
-        super.draw(batch, this.parentAlpha);
+        super.draw(batch, this.parentAlpha * parentAlpha);
     }
     //	public float getOriginWidth()
 //	{

@@ -46,7 +46,6 @@ public class MyGdxGame extends Game
 			else
 			{
 				VisUI.load(VisUI.SkinScale.X2);
-				R.SCALE /= 2;
 			}
 
 		}
@@ -73,6 +72,7 @@ public class MyGdxGame extends Game
 		VisUI.getSkin().get(VisTextField.VisTextFieldStyle.class).font = lazyBitmapFont;
 		VisUI.getSkin().get(ColorPickerStyle.class).titleFont = lazyBitmapFont;
 		VisUI.getSkin().get(VisCheckBox.VisCheckBoxStyle.class).font = lazyBitmapFont;
+		VisUI.getSkin().get("radio", VisRadioButton.VisCheckBoxStyle.class).font = lazyBitmapFont;
 		setScreen(new MainScreen());
         Gdx.graphics.setContinuousRendering(false);
 	}
