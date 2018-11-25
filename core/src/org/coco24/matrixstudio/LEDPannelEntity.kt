@@ -1,6 +1,7 @@
 package org.coco24.matrixstudio
 
 import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.scenes.scene2d.InputEvent
@@ -17,13 +18,14 @@ open class LEDPannelEntity(val WIDTH: Int, val HEIGHT: Int): Table()
     init
     {
         val ledTexture = Texture("led.png")
-
+        val sideLedTexture = Texture("led_side.png")
+        val emptyTexture = Texture(Pixmap(0, 0, Pixmap.Format.RGB565))
         for(i in 0 until HEIGHT)
         {
             val row = Array<LEDEntity>()
             for(j in 0 until WIDTH)
             {
-                val led = LEDEntity(ledTexture)
+                val led = LEDEntity(if((i == 0 || i == HEIGHT - 1) && (j == 0 || j == WIDTH - 1)) emptyTexture else if(i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) sideLedTexture else ledTexture)
                 led.pannelX = j
                 led.pannelY = i
                 row.add(led)

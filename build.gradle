@@ -16,7 +16,7 @@ buildscript {
         classpath 'de.richsource.gradle.plugins:gwt-gradle-plugin:0.6'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
-//        classpath 'com.android.tools.build:gradle:3.0.1'
+        classpath 'com.android.tools.build:gradle:3.2.1'
 //        classpath 'com.mobidevelop.robovm:robovm-gradle-plugin:2.3.1'
 
     }
@@ -30,12 +30,13 @@ allprojects {
     version = '1.0'
     ext {
         appName = "MatrixStudio"
-        gdxVersion = '1.9.8'
+        gdxVersion = '1.9.9'
         roboVMVersion = '2.3.1'
         box2DLightsVersion = '1.4'
         ashleyVersion = '1.7.3'
         aiVersion = '1.8.1'
         freeTypeVersion = gdxVersion
+        visuiVersion = '1.4.2-SNAPSHOT'
     }
 
     repositories {
@@ -62,34 +63,34 @@ project(":desktop") {
     }
 }
 //
-//project(":android") {
-//    apply plugin: "android"
-//
-//    configurations { natives }
-//
-//    dependencies {
-//        compile project(":core")
-//        compile "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
-//        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi"
-//        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
-//        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
-//        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86"
-//        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
-//        compile "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
-//        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-armeabi"
-//        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-armeabi-v7a"
-//        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-arm64-v8a"
-//        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-x86"
-//        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-x86_64"
-//
-//        compile "com.badlogicgames.gdx:gdx-freetype:$freeTypeVersion"
-//        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-armeabi"
-//        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-armeabi-v7a"
-//        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-arm64-v8a"
-//        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-x86"
-//        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-x86_64"
-//    }
-//}
+project(":android") {
+    apply plugin: "android"
+
+    configurations { natives }
+
+    dependencies {
+        compile project(":core")
+        compile "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi"
+        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
+        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
+        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86"
+        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
+        compile "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-armeabi"
+        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-armeabi-v7a"
+        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-arm64-v8a"
+        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-x86"
+        natives "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-x86_64"
+
+        compile "com.badlogicgames.gdx:gdx-freetype:$freeTypeVersion"
+        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-armeabi"
+        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-armeabi-v7a"
+        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-arm64-v8a"
+        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-x86"
+        natives "com.badlogicgames.gdx:gdx-freetype-platform:$freeTypeVersion:natives-x86_64"
+    }
+}
 
 //project(":ios") {
 //    apply plugin: "java"
@@ -130,7 +131,7 @@ project(":core") {
     dependencies {
         compile "com.badlogicgames.gdx:gdx:$gdxVersion"
         compile "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
-        compile "com.kotcrab.vis:vis-ui:1.4.1"
+        compile "com.kotcrab.vis:vis-ui:$visuiVersion"
         compile "com.badlogicgames.gdx:gdx-freetype:$freeTypeVersion"
         compile fileTree(dir: '../core/libs', include: '*.jar')
     }

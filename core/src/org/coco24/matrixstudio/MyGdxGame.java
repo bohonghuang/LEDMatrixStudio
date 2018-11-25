@@ -1,19 +1,13 @@
 package org.coco24.matrixstudio;
 
 import com.badlogic.gdx.Application;
-import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.kotcrab.vis.ui.VisUI;
 import com.kotcrab.vis.ui.widget.*;
-import com.kotcrab.vis.ui.widget.Tooltip;
-import com.kotcrab.vis.ui.widget.color.ColorPicker;
 import com.kotcrab.vis.ui.widget.color.ColorPickerStyle;
 import com.rpsg.lazyFont.LazyBitmapFont;
 
@@ -27,12 +21,11 @@ public class MyGdxGame extends Game
         static float SCALE = 1f;
         static float unitsPerPixel = 1f;
         static int fontSize = 20;
+        static float splitScale = 1f;
     }
+
 	@Override
 	public void create () {
-
-	    System.out.println("PPI: " + Gdx.graphics.getPpiY()) ;
-
 		Tween.registerAccessor(MainScreen.class, new PagesSurface.Companion.PagesSurfaceAccessor());
 
 		R.PPI = (Gdx.graphics.getPpiX() + Gdx.graphics.getPpiY()) / 2;
@@ -47,14 +40,16 @@ public class MyGdxGame extends Game
 			{
 				VisUI.load(VisUI.SkinScale.X2);
 			}
-
 		}
 		else
 		{
+		    R.splitScale = 1.5f;
 			VisUI.load(VisUI.SkinScale.X2);
 			R.SCALE = 1.2f;
 			R.unitsPerPixel =  600f / Gdx.graphics.getHeight();
 			R.fontSize *= 0.9f;
+			if(Gdx.app.getType() == Application.ApplicationType.Android)
+				System.setProperty("user.home", "/storage/emulated/0");
 		}
         FreeTypeFontGenerator generator = new FreeTypeFontGenerator(Gdx.files.internal("fonts/default.ttf"));
 		LazyBitmapFont lazyBitmapFont = new LazyBitmapFont(generator, (int)(R.fontSize * R.SCALE));

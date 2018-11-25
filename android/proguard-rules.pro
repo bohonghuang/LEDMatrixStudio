@@ -28,6 +28,47 @@
 -dontwarn com.badlogic.gdx.jnigen.BuildTarget*
 -dontwarn com.badlogic.gdx.graphics.g2d.freetype.FreetypeBuild
 
+-dontwarn **
+
+-keep class com.kotcrab.vis.** {
+    <fields>;
+    <methods>;
+}
+
+-keep class com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator {
+    <fields>;
+}
+
+-keep class bsh.** {
+    <methods>;
+}
+-keep class com.badlogic.gdx.graphics.g2d.BitmapFont {
+    <fields>;
+}
+
+-keep class com.badlogic.gdx.graphics.Color {
+    <fields>;
+}
+
+-keep class com.badlogic.gdx.scenes.scene2d.** {
+    <fields>;
+}
+
+-keepclassmembers class * extends java.lang.Enum {
+    <fields>;
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+-keepclasseswithmembers,allowshrinking class * {
+    native <methods>;
+}
+
+-keepclassmembers enum  * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
 -keep class com.badlogic.gdx.controllers.android.AndroidControllers
 
 -keepclassmembers class com.badlogic.gdx.backends.android.AndroidInput* {

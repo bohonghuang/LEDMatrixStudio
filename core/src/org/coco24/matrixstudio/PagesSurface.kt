@@ -20,11 +20,6 @@ interface PagesSurface
                 values[0] = target.getCurrentPage().toFloat()
                 return 1
             }
-            enum class Type
-            {
-                Loop, Loop_Turnback, Loop_Reversed
-            }
-
         }
     }
     fun showPage(page: Int);

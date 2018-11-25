@@ -5,6 +5,7 @@ import aurelienribon.tweenengine.Tween
 import aurelienribon.tweenengine.TweenManager
 import aurelienribon.tweenengine.equations.Linear
 import com.badlogic.gdx.*
+import com.badlogic.gdx.files.FileHandle
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
@@ -25,12 +26,49 @@ import com.kotcrab.vis.ui.widget.*
 import com.kotcrab.vis.ui.widget.Tooltip
 import com.kotcrab.vis.ui.widget.color.ColorPicker
 import com.kotcrab.vis.ui.widget.color.ColorPickerAdapter
+import com.kotcrab.vis.ui.widget.file.FileChooser
+import com.kotcrab.vis.ui.widget.file.FileChooserAdapter
+import com.kotcrab.vis.ui.widget.file.FileChooserListener
+import com.kotcrab.vis.ui.widget.file.FileTypeFilter
 import org.coco24.matrixstudio.LEDCell.ColorizedLEDCell
 import org.coco24.matrixstudio.MyGdxGame.R
+import java.io.FileFilter
 import java.lang.IllegalStateException
 
-class MainScreen : Screen, PagesSurface, Tools.CellsFiller
+class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
 {
+    override fun setName(name: String)
+    {
+        projectName = name
+    }
+
+    override fun setSequences(sequences: Array<LEDSequence>)
+    {
+        lightsSeqs.clear()
+        lightsSeqs.addAll(sequences)
+    }
+
+    override fun setQueues(queues: Array<NamedQueue<LEDCell>>)
+    {
+        lightsQueues.clear()
+        lightsQueues.addAll(queues)
+    }
+
+    var projectName = "未命名"
+    override fun getName(): String
+    {
+        return projectName
+    }
+
+    override fun getSequences(): Array<LEDSequence>
+    {
+        return lightsSeqs
+    }
+
+    override fun getQueues(): Array<NamedQueue<LEDCell>>
+    {
+        return lightsQueues
+    }
 
 
     lateinit var ledPannelScrollPane: VisScrollPane
@@ -140,38 +178,17 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
     val tools = Array<Tools.Tool>()
     lateinit var lightsFrontColorImage: Image
     lateinit var lightsBackColorImage: Image
-    fun newSeq(name: String): NamedArray<LEDPage>
+    fun newSeq(name: String): LEDSequence //TODO: 修复
     {
-        val array = object : NamedArray<LEDPage>(name)
-        {
-            fun syncTotalFrames()
-            {
-                totalFrameLabel.setText(size.toString())
-            }
-
-            override fun add(value: LEDPage?)
-            {
-                super.add(value)
-                syncTotalFrames()
-            }
-
-            override fun removeIndex(index: Int): LEDPage
-            {
-                val ret = super.removeIndex(index)
-                syncTotalFrames()
-                return ret
-            }
-
-            override fun insert(index: Int, value: LEDPage?)
-            {
-                super.insert(index, value)
-                syncTotalFrames()
-            }
-        }
+        val array = LEDSequence(name, ledPannel.WIDTH, ledPannel.HEIGHT)
         array.add(LEDPage(pannelWidth, pannelHeight))
         return array
     }
-    var currentSeq: NamedArray<LEDPage>
+    fun syncTotalFrames()
+    {
+        totalFrameLabel.setText(currentSeq.size.toString())
+    }
+    var currentSeq: LEDSequence
     set(value)
     {
         currentSeqIndex = lightsSeqs.indexOf(value)
@@ -194,22 +211,27 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
         }
         lightsSeqList.setItems(list)
     }
-    val lightsSeqs = object : Array<NamedArray<LEDPage>>()
+    val lightsSeqs = object : Array<LEDSequence>()
     {
-        override fun add(value: NamedArray<LEDPage>?)
+        override fun addAll(vararg array: LEDSequence?)
+        {
+            super.addAll(*array)
+            refreshLightsSeqsList()
+        }
+        override fun add(value: LEDSequence?)
         {
             super.add(value)
             refreshLightsSeqsList()
         }
 
-        override fun removeIndex(index: Int): NamedArray<LEDPage>
+        override fun removeIndex(index: Int): LEDSequence
         {
             val ret = super.removeIndex(index)
             refreshLightsSeqsList()
             return ret
         }
 
-        override fun insert(index: Int, value: NamedArray<LEDPage>?)
+        override fun insert(index: Int, value: LEDSequence?)
         {
             super.insert(index, value)
             refreshLightsSeqsList()
@@ -260,32 +282,6 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
         tools.add(Tools.Rectangle(ledPannel, this))
         tools.add(Tools.Bucket(ledPannel, this))
     }
-//    interface LEDCell
-//    {
-//        fun getColor(): Color;
-//    }
-
-    class LEDPage(private var width: Int, private var height: Int)
-    {
-        val leds = Array<Array<LEDCell>>()
-
-        init
-        {
-            for (i in 0 until height)
-            {
-                val array = Array<LEDCell>()
-                for (j in 0 until width)
-                {
-                    array.add(ColorizedLEDCell())
-                }
-                leds.add(array)
-            }
-        }
-
-        fun getWidth(): Int = width
-        fun getHeight(): Int = height
-    }
-
 
     var currentPage: LEDPage
         get()
@@ -334,7 +330,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
         return currentPageIndex
     }
     fun pageToPannel() = sync(true)
-    fun pannelToPage() = sync(false)
+    fun pannelToPage() = if(currentSeqIndex in 0 until lightsSeqs.size) sync(false) else currentSeqIndex = currentSeqIndex - 1
     fun sync(pageToPannel: Boolean)
     {
         val currentPage = currentPage
@@ -358,10 +354,16 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
     {
         Playing, Paused, Stopped
     }
+    enum class PlayMode(val _name: String = "PlayMode")
+    {
+        Ordered("正序播放"), OrderedReversed("倒序播放"), Loop("循环播放"), LoopReversed("辗转播放")
+    }
 
     val playerTweenManager = TweenManager()
     var playerStatus = PlayerStatus.Stopped
-    var playerSpeed = 96
+    var playMode = PlayMode.Ordered
+    var playerSpeed = 200
+    val widgetsOriginalTouchable = HashMap<Actor, Touchable>()
     val disabledWidgetsWhenPlaying = Array<Actor>()
     lateinit var lightsQueueList: VisList<String>
     fun refreshLightsQueue()
@@ -375,7 +377,11 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
     }
     val lightsQueues = object : Array<NamedQueue<LEDCell>>()
     {
-
+        override fun addAll(array: Array<out NamedQueue<LEDCell>>?)
+        {
+            super.addAll(array)
+            refreshLightsQueue()
+        }
         override fun add(value: NamedQueue<LEDCell>?)
         {
             super.add(value)
@@ -416,6 +422,11 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
         return lightsQueues[currentLightsQueuesIndex]
         else return null
     }
+    fun colorCell()
+    {
+        frontCell = frontColorizedLEDCell
+        backCell = backColorizedLEDCell
+    }
     override fun show()
     {
         val tableBackground = (VisUI.getSkin().get(VisImageButton.VisImageButtonStyle::class.java).up as NinePatchDrawable).tint(if (R.PPI < 128) Color.WHITE else Color.LIGHT_GRAY)
@@ -426,7 +437,78 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
             run {
                 val fileMenu = Menu("文件");
                 run {
+                    val newFileMenuItem = MenuItem("新建工程")
+                    newFileMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            currentPageIndex = 0
+                            initProject()
+                            pageToPannel()
+                            syncTotalFrames()
+                            colorCell()
+                        }
+                    })
                     val openFileMenuItem = MenuItem("打开工程...");
+                    openFileMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            val fileChooser = FileChooser("打开工程", FileChooser.Mode.OPEN)
+                            val fileFilter = FileTypeFilter(true)
+                            fileFilter.addRule("Matrix Studio 工程文件 (*.msp)", "msp")
+                            fileChooser.setFileTypeFilter(fileFilter)
+                            fileChooser.setListener(object : FileChooserListener
+                            {
+                                override fun selected(files: Array<FileHandle>?)
+                                {
+                                    if(files == null) return
+                                    if(files.size > 0)
+                                    {
+                                        ProjectXMLUtils.loadFromXML(this@MainScreen, files[0])
+                                        pageToPannel()
+                                        syncTotalFrames()
+                                        colorCell()
+                                    }
+                                    fileChooser.fadeOut()
+                                }
+                                override fun canceled() = fileChooser.fadeOut()
+                            })
+                            fileChooser.width = 900f
+                            stage.addActor(fileChooser)
+                            fileChooser.fadeIn()
+                        }
+                    })
+                    val saveFileMenuItem = MenuItem("保存工程...")
+                    saveFileMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            val fileChooser = FileChooser("保存工程", FileChooser.Mode.SAVE)
+                            val fileFilter = FileTypeFilter(true)
+                            fileFilter.addRule("Matrix Studio 工程文件 (*.msp)", "msp")
+                            fileChooser.setFileTypeFilter(fileFilter)
+                            fileChooser.setListener(object : FileChooserListener
+                            {
+                                override fun selected(files: Array<FileHandle>?)
+                                {
+                                    if(files == null) return
+                                    if(files.size > 0)
+                                    {
+                                        pannelToPage()
+                                        projectName = files[0].nameWithoutExtension() //TODO: 暂时
+                                        ProjectXMLUtils.writeXML(this@MainScreen, files[0])
+                                    }
+                                    fileChooser.fadeOut()
+                                }
+                                override fun canceled() = fileChooser.fadeOut()
+                            })
+                            fileChooser.setDefaultFileName("$projectName.msp")
+                            fileChooser.width = 900f
+                            stage.addActor(fileChooser)
+                            fileChooser.fadeIn()
+                        }
+                    })
                     val closeFileMenuItem = MenuItem("关闭工程");
                     val exitFileMenuItem = MenuItem("退出");
                     exitFileMenuItem.addListener(object : ChangeListener()
@@ -436,8 +518,40 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                             Gdx.app.exit()
                         }
                     })
+                    val saveCurrentSeqMenuItem = MenuItem("导出片段...")
+                    saveCurrentSeqMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            val fileChooser = FileChooser("导出灯光片段", FileChooser.Mode.SAVE)
+                            val fileFilter = FileTypeFilter(true)
+                            fileFilter.addRule("MIDI文件 (*.mid)", "mid")
+                            fileChooser.setFileTypeFilter(fileFilter)
+                            fileChooser.setListener(object : FileChooserListener
+                            {
+                                override fun selected(files: Array<FileHandle>?)
+                                {
+                                    if(files == null) return
+                                    if(files.size > 0)
+                                    {
+                                        saveAsMidiFile(files[0])
+                                    }
+                                    fileChooser.fadeOut()
+                                }
+                                override fun canceled() = fileChooser.fadeOut()
+                            })
+                            fileChooser.setDefaultFileName("${currentSeq.name}.mid")
+                            fileChooser.width = 900f
+                            stage.addActor(fileChooser)
+                            fileChooser.fadeIn()
+                        }
+                    })
+                    fileMenu.addItem(newFileMenuItem)
                     fileMenu.addItem(openFileMenuItem);
-                    fileMenu.addItem(closeFileMenuItem);
+                    fileMenu.addItem(saveFileMenuItem)
+//                    fileMenu.addItem(closeFileMenuItem);
+                    fileMenu.addSeparator()
+                    fileMenu.addItem(saveCurrentSeqMenuItem)
                     fileMenu.addSeparator()
                     fileMenu.addItem(exitFileMenuItem);
                 }
@@ -454,27 +568,29 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                             }
                         }
                     }
-                    val subQueueOffsetMenuItem = MenuItem("前移序列")
+                    val subQueueOffsetMenuItem = MenuItem("前移页序列编号")
                     subQueueOffsetMenuItem.addListener(object : ChangeListener()
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
                         {
+                            pannelToPage()
                             offsetCurrentPageQueuedIndex(-1)
                             pageToPannel()
                         }
                     })
 
-                    val addQueueOffsetMenuItem = MenuItem("后移序列")
+                    val addQueueOffsetMenuItem = MenuItem("后移页序列编号")
                     addQueueOffsetMenuItem.addListener(object : ChangeListener()
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
                         {
+                            pannelToPage()
                             offsetCurrentPageQueuedIndex(1)
                             pageToPannel()
                         }
                     })
 
-                    val convertAllQueuedLedCell = MenuItem("移除所有序列编号")
+                    val convertAllQueuedLedCell = MenuItem("移除片段序列编号")
                     convertAllQueuedLedCell.addListener(object : ChangeListener()
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -520,8 +636,8 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                     val viewPannelStyle = MenuItem("矩阵面板样式")
                     viewMenu.addItem(viewZoomInMenuItem)
                     viewMenu.addItem(viewZoomOutMenuItem)
-                    viewMenu.addSeparator()
-                    viewMenu.addItem(viewPannelStyle)
+//                    viewMenu.addSeparator()
+//                    viewMenu.addItem(viewPannelStyle)
                 }
                 val effectMenu = Menu("效果");
                 run {
@@ -565,8 +681,8 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                 menuBar.addMenu(fileMenu);
                 menuBar.addMenu(editMenu);
                 menuBar.addMenu(viewMenu);
-                menuBar.addMenu(effectMenu);
-                menuBar.addMenu(deviceMenu);
+//                menuBar.addMenu(effectMenu);
+//                menuBar.addMenu(deviceMenu);
                 menuBar.addMenu(helpMenu);
             }
 
@@ -577,7 +693,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                 val deviceSelectBox = VisSelectBox<String>()
                 deviceSelectBox.setItems("Virtual Matrix")
                 subMenuBarLeftTable.add(deviceSelectBox).minWidth(200f * R.SCALE)
-                val playerControllerSpeedTextField = VisTextField("96")
+                val playerControllerSpeedTextField = VisTextField(playerSpeed.toString())
                 playerControllerSpeedTextField.textFieldFilter = object : VisTextField.TextFieldFilter.DigitsOnlyFilter()
                 {
                     override fun acceptChar(textField: VisTextField, c: Char): Boolean
@@ -595,25 +711,15 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                 }
 
 //                subMenuBarLeftTable.addSeparator(true)
-                subMenuBarLeftTable.add("速度:")
+                subMenuBarLeftTable.add("播放速度：")
                 subMenuBarLeftTable.add(playerControllerSpeedTextField).width(64f * R.SCALE)
                 val playerControllerPlayButton = VisImageButton("default")
                 playerControllerPlayButton.addListener(object : ChangeListener()
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
-                        pannelToPage()
-                        playerStatus = PlayerStatus.Playing
-                        Gdx.graphics.isContinuousRendering = true
                         playerControllerSpeedTextField.textFieldFilter.acceptChar(playerControllerSpeedTextField, '\n')
-                        playerTweenManager.killAll()
-                        Timeline.createSequence()
-                                .push(Tween.set(this@MainScreen, 0).target(0f))
-                                .push(Tween.to(this@MainScreen, 0, 1f).target(currentSeq.size - 0.00001f).ease(Linear.INOUT))
-                                .repeat(Tween.INFINITY, 0f).start(playerTweenManager)
-                        disabledWidgetsWhenPlaying.forEach {
-                            setTouchable(it, Touchable.disabled)
-                        }
+                        play()
                     }
                 })
                 playerControllerPlayButton.add(Image(Texture("play.png"))).maxSize(24 * R.SCALE)
@@ -623,16 +729,27 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
-                        playerStatus = PlayerStatus.Stopped
-                        Gdx.graphics.isContinuousRendering = false
-                        playerTweenManager.killAll()
-                        disabledWidgetsWhenPlaying.forEach {
-                            setTouchable(it, Touchable.enabled)
-                        }
+                        stop()
                     }
                 })
                 subMenuBarLeftTable.add(playerControllerPlayButton)
                 subMenuBarLeftTable.add(playerControllerStopButton)
+                val playModeSelectBox = VisSelectBox<String>()
+                val playModeNames = Array<String>()
+                PlayMode.values().forEach {
+                    playModeNames.add(it._name)
+                }
+                playModeSelectBox.items = playModeNames
+                playModeSelectBox.addListener(object : ChangeListener()
+                {
+                    override fun changed(event: ChangeEvent?, actor: Actor?)
+                    {
+                        playMode = PlayMode.values()[playModeSelectBox.selectedIndex]
+                        if(playerStatus == PlayerStatus.Playing)
+                            play()
+                    }
+                })
+                subMenuBarLeftTable.add(playModeSelectBox)
                 subMenuBarLeftTable.cells.forEach {
                     it.left().pad(5f * R.SCALE)
                 }
@@ -770,6 +887,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                                             {
                                                 Utils.copyNamedQueue(queueEditor.ledQueue, currentLightsQueue?:return)
                                                 refreshLightsQueue()
+                                                pageToPannel()
                                             }
                                         }
                                     }
@@ -882,8 +1000,8 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                             lightsColorTable.pack()
                         }
                         mainLeftSplitPane.setWidgets(lightsToolsTable, lightsColorTable, lightsQueueTable, lightsSeqTable)
-                        mainLeftSplitPane.setSplit(0, 0.125f)
-                        mainLeftSplitPane.setSplit(1, 0.25f)
+                        mainLeftSplitPane.setSplit(0, 0.125f * R.splitScale)
+                        mainLeftSplitPane.setSplit(1, 0.25f * R.splitScale)
                         mainLeftSplitPane.pack()
 
                         setBackground(mainLeftSplitPane, tableBackground)
@@ -916,7 +1034,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                         ledPannelScrollPane.setFlickScroll(false)
                     }
                     mainMultiSplitPane.setWidgets(mainLeftSplitPane, ledPannelScrollPane)
-                    mainMultiSplitPane.setSplit(0, 0.2f)
+                    mainMultiSplitPane.setSplit(0, 0.2f * R.splitScale)
                 }
                 mainTable.add(mainMultiSplitPane).grow()
                 mainTable.cells.forEach {
@@ -956,6 +1074,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                         if (currentSeq.size > 1)
                         {
                             currentSeq.removeIndex(currentPageIndex)
+                            syncTotalFrames()
                             currentPageIndex--
                             currentFrameTextField.text = (currentPageIndex + 1).toString()
                             pageToPannel()
@@ -1002,6 +1121,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
                         currentSeq.insert(currentPageIndex + 1, LEDPage(pannelWidth, pannelHeight))
+                        syncTotalFrames()
                         changePage(currentPageIndex + 1)
                     }
                 })
@@ -1030,22 +1150,85 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
             bottomMenuBar.background = tableBackground
             menuBar.table.background = tableBackground
         }
-        lightsSeqs.add(newSeq("新建灯光片段"))
+
+        initProject()
 
         Gdx.input.inputProcessor = stage;
 
         (stage.viewport as ScreenViewport).unitsPerPixel = R.unitsPerPixel
         changePage(0)
 
+    }
+
+    private fun initProject()
+    {
+        lightsSeqs.clear()
+        lightsQueues.clear()
+
         val rainbowQueue = NamedQueue<LEDCell>()
         rainbowQueue.name = "彩虹渐变"
         //TODO：背景色新建对象
-        for(h in 0 .. 360 step 30)
+        for (h in 0 until 360 step 30)
         {
             val color = Color(Color.WHITE)
             rainbowQueue.addLast(ColorizedLEDCell(color.fromHsv(h.toFloat(), 1f, 1f)))
         }
         lightsQueues.add(rainbowQueue)
+        lightsSeqs.add(newSeq("新建灯光片段"))
+    }
+
+    private fun saveAsMidiFile(file: FileHandle)
+    {
+        val exporter = MidiFileExporter()
+        exporter.callback = object : Windows.BooleanCallback
+        {
+            override fun callback(result: Boolean)
+            {
+                if(result)
+                {
+                    pannelToPage()
+                    LightsConverter.writeMidiFileFromSequence(currentSeq, exporter.layoutConfig, LightsConverter.mk2ColorPalette, file)
+                }
+            }
+        }
+        stage.addActor(exporter)
+        exporter.fadeIn()
+
+    }
+
+    private fun stop()
+    {
+        playerStatus = PlayerStatus.Stopped
+        Gdx.graphics.isContinuousRendering = false
+        playerTweenManager.killAll()
+        disabledWidgetsWhenPlaying.forEach {
+            setTouchable(it, Touchable.enabled)
+        }
+    }
+
+    private fun play()
+    {
+        if(currentSeq.size <= 1) return
+        pannelToPage()
+        playerStatus = PlayerStatus.Playing
+        Gdx.graphics.isContinuousRendering = true
+        playerTweenManager.killAll()
+        val reverseNeededTime = 1f / currentSeq.size
+        val initialTween = Tween.set(this@MainScreen, 0).target(0f)
+        val playTween = Tween.to(this@MainScreen, 0, 1f - reverseNeededTime).target(currentSeq.size - 1f).ease(Linear.INOUT)
+        val initialReversedTween = Tween.set(this@MainScreen, 0).target(currentSeq.size - 1f)
+        val playReversedTween = Tween.to(this@MainScreen, 0, 1f - reverseNeededTime * 2) .target(0.99999f).ease(Linear.INOUT).delay(reverseNeededTime)
+        when(playMode)
+        {
+            PlayMode.Ordered -> Timeline.createSequence().push(initialTween).push(playTween.delay(reverseNeededTime)).setCallback { i, baseTween -> stop() }
+            PlayMode.OrderedReversed -> Timeline.createSequence().push(initialReversedTween).push(playReversedTween).setCallback { i, baseTween -> stop() }
+            PlayMode.Loop -> Timeline.createSequence().push(initialTween).push(playTween).repeat(Tween.INFINITY, reverseNeededTime).start(playerTweenManager)
+            PlayMode.LoopReversed -> Timeline.createSequence().push(initialTween).push(playTween).push(initialReversedTween).push(playReversedTween).repeat(Tween.INFINITY, 0f).start(playerTweenManager)
+        }.start(playerTweenManager)
+
+        disabledWidgetsWhenPlaying.forEach {
+            setTouchable(it, Touchable.disabled)
+        }
     }
 
     private fun duplicatePage()
@@ -1068,6 +1251,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
             }
         }
         currentSeq.insert(currentPageIndex + 1, page)
+        syncTotalFrames()
         changePage(currentPageIndex + 1)
     }
 
@@ -1082,10 +1266,12 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
 
     fun setTouchable(actor: Actor, touchable: Touchable)
     {
+        widgetsOriginalTouchable.put(actor, touchable)
         actor.touchable =
                 if (touchable == Touchable.enabled)
-                    if (actor is WidgetGroup) Touchable.childrenOnly
-                    else Touchable.enabled
+//                    if (actor is WidgetGroup) Touchable.childrenOnly
+//                    else
+                        Touchable.enabled
                 else touchable
         if (actor is Button)
         {
@@ -1373,6 +1559,39 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller
         open fun finish()
         {
 
+        }
+    }
+    class MidiFileExporter(): VisWindow("MIDI灯光片段选项")
+    {
+        var callback: Windows.BooleanCallback? = null
+        var layoutConfig = LightsConverter.CoordinatesConfig.LaunchpadPro
+        init
+        {
+            val layoutConfigSelectBox = VisSelectBox<String>()
+            val layoutNames = Array<String>()
+            LightsConverter.CoordinatesConfig.values().forEach {
+                layoutNames.add(it.name)
+            }
+            layoutConfigSelectBox.setItems(layoutNames)
+            val paletteConfigSelectBox = VisSelectBox<String>()
+            paletteConfigSelectBox.setItems("Launchpad MKII/Pro")
+            val buttonTable = Windows.createBooleanButtonsTable(object : Windows.BooleanCallback
+            {
+                override fun callback(result: Boolean)
+                {
+                    layoutConfig = LightsConverter.CoordinatesConfig.values()[layoutConfigSelectBox.selectedIndex]
+                    callback?.callback(result)
+                    fadeOut()
+                }
+            })
+            add("布局配置：")
+            add(layoutConfigSelectBox).row()
+            add("色板配置：")
+            add(paletteConfigSelectBox).row()
+            add(buttonTable).colspan(2)
+            pack()
+            isModal = true
+            centerWindow()
         }
     }
 }
