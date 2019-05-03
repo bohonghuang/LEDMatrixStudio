@@ -3,10 +3,9 @@ package org.coco24.matrixstudio
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
 import com.kotcrab.vis.ui.widget.*
-import com.kotcrab.vis.ui.widget.spinner.ArraySpinnerModel
 import com.kotcrab.vis.ui.widget.spinner.IntSpinnerModel
 import com.kotcrab.vis.ui.widget.spinner.Spinner
-import org.coco24.matrixstudio.MyGdxGame.R
+import org.coco24.matrixstudio.GdxGame.R
 
 object Windows
 {

@@ -50,6 +50,11 @@
     <fields>;
 }
 
+-keep class org.dom4j.** {
+    <fields>;
+    <methods>;
+}
+
 -keep class com.badlogic.gdx.scenes.scene2d.** {
     <fields>;
 }

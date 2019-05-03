@@ -27,12 +27,10 @@ import com.kotcrab.vis.ui.widget.Tooltip
 import com.kotcrab.vis.ui.widget.color.ColorPicker
 import com.kotcrab.vis.ui.widget.color.ColorPickerAdapter
 import com.kotcrab.vis.ui.widget.file.FileChooser
-import com.kotcrab.vis.ui.widget.file.FileChooserAdapter
 import com.kotcrab.vis.ui.widget.file.FileChooserListener
 import com.kotcrab.vis.ui.widget.file.FileTypeFilter
 import org.coco24.matrixstudio.LEDCell.ColorizedLEDCell
-import org.coco24.matrixstudio.MyGdxGame.R
-import java.io.FileFilter
+import org.coco24.matrixstudio.GdxGame.R
 import java.lang.IllegalStateException
 
 class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
@@ -44,6 +42,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
 
     override fun setSequences(sequences: Array<LEDSequence>)
     {
+        currentPageIndex = 0
         lightsSeqs.clear()
         lightsSeqs.addAll(sequences)
     }
@@ -213,9 +212,10 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
     }
     val lightsSeqs = object : Array<LEDSequence>()
     {
-        override fun addAll(vararg array: LEDSequence?)
+        override fun addAll(array: Array<out LEDSequence>?)
         {
-            super.addAll(*array)
+            super.addAll(array)
+            pageToPannel()
             refreshLightsSeqsList()
         }
         override fun add(value: LEDSequence?)
@@ -242,12 +242,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
     {
         if(value >= 0 && value < lightsSeqs.size)
             field = value
-//        lightsSeqList.selectedIndex = value
     }
-//    get()
-//    {
-//        return lightsSeqList.selectedIndex
-//    }
 
     lateinit var totalFrameLabel: VisLabel
     lateinit var currentFrameTextField: VisTextField
@@ -293,22 +288,27 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
             currentPageIndex = currentSeq.indexOf(value)
         }
 
+    fun syncFrameLabel()
+    {
+        currentFrameTextField.text = (currentPageIndex + 1).toString()
+        currentFrameTextField.isInputValid = true
+    }
     fun changePage(page: Int)
     {
         pannelToPage()
         currentPageIndex = page
         pageToPannel()
+        syncFrameLabel()
 
-        currentFrameTextField.text = (currentPageIndex + 1).toString()
-        currentFrameTextField.isInputValid = true
     }
     fun changeSeq(seq: Int)
     {
         if(!(seq in 0 until lightsSeqs.size))
             return
-        pannelToPage()
+        if(currentSeqIndex >= 0)
+            pannelToPage()
         currentPageIndex = 0
-        currentFrameTextField.text = (currentPageIndex + 1).toString()
+        syncFrameLabel()
         currentSeqIndex = seq
         totalFrameLabel.setText(currentSeq.size.toString())
         pageToPannel()
@@ -317,7 +317,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
     {
         currentPageIndex = page
         pageToPannel()
-        currentFrameTextField.text = (currentPageIndex + 1).toString()
+        syncFrameLabel()
     }
 
     override fun getPagesSize(): Int
@@ -427,6 +427,48 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
         frontCell = frontColorizedLEDCell
         backCell = backColorizedLEDCell
     }
+    fun offsetCurrentPageQueuedIndex(offset: Int)
+    {
+        currentPage.leds.forEach { cells ->
+            cells.forEach {
+                if(it is LEDCell.QueuedLEDCell)
+                {
+                    it.ledsQueueOffset += offset
+                }
+            }
+        }
+    }
+    fun autoOffsetQueue(offset: Int)
+    {
+        var page: LEDPage
+        var operated: Boolean
+        do
+        {
+            page = currentPage
+            operated = false
+            for(cells in page.leds)
+            {
+                for(cell in cells){
+                    if(cell is LEDCell.QueuedLEDCell)
+                    {
+                        val positive = offset > 0
+                        if((cell.ledsQueueOffset + offset)
+                                in (if(positive) Int.MIN_VALUE else 0)
+                                until (if(positive) cell.ledsQueue.size else Int.MAX_VALUE))
+                        {
+                            operated = true
+                            break
+                        }
+                    }
+                }
+                if(operated)
+                    break
+            }
+            if(operated)
+                duplicatePage(offset)
+
+        }while (operated)
+    }
     override fun show()
     {
         val tableBackground = (VisUI.getSkin().get(VisImageButton.VisImageButtonStyle::class.java).up as NinePatchDrawable).tint(if (R.PPI < 128) Color.WHITE else Color.LIGHT_GRAY)
@@ -444,9 +486,6 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         {
                             currentPageIndex = 0
                             initProject()
-                            pageToPannel()
-                            syncTotalFrames()
-                            colorCell()
                         }
                     })
                     val openFileMenuItem = MenuItem("打开工程...");
@@ -456,7 +495,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         {
                             val fileChooser = FileChooser("打开工程", FileChooser.Mode.OPEN)
                             val fileFilter = FileTypeFilter(true)
-                            fileFilter.addRule("Matrix Studio 工程文件 (*.msp)", "msp")
+                            fileFilter.addRule("Matrix Studio 工程文件 (*.mxsp)", "mxsp")
                             fileChooser.setFileTypeFilter(fileFilter)
                             fileChooser.setListener(object : FileChooserListener
                             {
@@ -466,6 +505,8 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     if(files.size > 0)
                                     {
                                         ProjectXMLUtils.loadFromXML(this@MainScreen, files[0])
+
+                                        syncFrameLabel()
                                         pageToPannel()
                                         syncTotalFrames()
                                         colorCell()
@@ -486,7 +527,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         {
                             val fileChooser = FileChooser("保存工程", FileChooser.Mode.SAVE)
                             val fileFilter = FileTypeFilter(true)
-                            fileFilter.addRule("Matrix Studio 工程文件 (*.msp)", "msp")
+                            fileFilter.addRule("Matrix Studio 工程文件 (*.mxsp)", "mxsp")
                             fileChooser.setFileTypeFilter(fileFilter)
                             fileChooser.setListener(object : FileChooserListener
                             {
@@ -503,7 +544,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                 }
                                 override fun canceled() = fileChooser.fadeOut()
                             })
-                            fileChooser.setDefaultFileName("$projectName.msp")
+                            fileChooser.setDefaultFileName("$projectName.mxsp")
                             fileChooser.width = 900f
                             stage.addActor(fileChooser)
                             fileChooser.fadeIn()
@@ -557,18 +598,8 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                 }
                 val editMenu = Menu("编辑");
                 run {
-                    fun offsetCurrentPageQueuedIndex(offset: Int)
-                    {
-                        currentPage.leds.forEach {
-                            it.forEach {
-                                if(it is LEDCell.QueuedLEDCell)
-                                {
-                                    it.ledsQueueOffset += offset
-                                }
-                            }
-                        }
-                    }
-                    val subQueueOffsetMenuItem = MenuItem("前移页序列编号")
+
+                    val subQueueOffsetMenuItem = MenuItem("前移当前页序列")
                     subQueueOffsetMenuItem.addListener(object : ChangeListener()
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -579,7 +610,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         }
                     })
 
-                    val addQueueOffsetMenuItem = MenuItem("后移页序列编号")
+                    val addQueueOffsetMenuItem = MenuItem("后移当前页序列")
                     addQueueOffsetMenuItem.addListener(object : ChangeListener()
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -589,8 +620,25 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                             pageToPannel()
                         }
                     })
-
-                    val convertAllQueuedLedCell = MenuItem("移除片段序列编号")
+                    val autoSubQueueOffsetMenuItem = MenuItem("自动复制并前移序列")
+                    autoSubQueueOffsetMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            pannelToPage()
+                            autoOffsetQueue(-1)
+                        }
+                    })
+                    val autoAddQueueOffsetMenuItem = MenuItem("自动复制并后移序列")
+                    autoAddQueueOffsetMenuItem.addListener(object : ChangeListener()
+                    {
+                        override fun changed(event: ChangeEvent?, actor: Actor?)
+                        {
+                            pannelToPage()
+                            autoOffsetQueue(1)
+                        }
+                    })
+                    val convertAllQueuedLedCell = MenuItem("转换序列为颜色")
                     convertAllQueuedLedCell.addListener(object : ChangeListener()
                     {
                         override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -612,6 +660,9 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                     })
                     editMenu.addItem(subQueueOffsetMenuItem)
                     editMenu.addItem(addQueueOffsetMenuItem)
+                    editMenu.addSeparator()
+                    editMenu.addItem(autoSubQueueOffsetMenuItem)
+                    editMenu.addItem(autoAddQueueOffsetMenuItem)
                     editMenu.addSeparator()
                     editMenu.addItem(convertAllQueuedLedCell)
                 }
@@ -722,7 +773,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         play()
                     }
                 })
-                playerControllerPlayButton.add(Image(Texture("play.png"))).maxSize(24 * R.SCALE)
+                playerControllerPlayButton.add(Image(GdxGame.getTexture("play.png"))).maxSize(24 * R.SCALE)
                 playerControllerPlayButton.pack()
                 val playerControllerStopButton = VisTextButton("■")
                 playerControllerStopButton.addListener(object : ChangeListener()
@@ -768,7 +819,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         run {
                             lightsSeqTable.add("灯光片段").left()
                             val buttonsTable = VisTable()
-                            val addLightsSeqButton = VisTextButton("+")
+                            val addLightsSeqButton = getImageButtonWithBorder("add")
                             addLightsSeqButton.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -788,7 +839,17 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     nameWindow.fadeIn()
                                 }
                             })
-                            val editLightsSeqButton = VisTextButton("E")
+                            val duplicateLightsSeqButton = getImageButtonWithBorder("duplicate")
+                            duplicateLightsSeqButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    val seq = currentSeq.clone() as LEDSequence
+                                    seq.name = "@${seq.hashCode()}"
+                                    lightsSeqs.insert(currentSeqIndex + 1, seq)
+                                }
+                            })
+                            val editLightsSeqButton = getImageButtonWithBorder("edit")
                             editLightsSeqButton.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -809,7 +870,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     nameWindow.fadeIn()
                                 }
                             })
-                            val deleteLightsSeqButton = VisTextButton("×")
+                            val deleteLightsSeqButton = getImageButtonWithBorder("delete")
                             deleteLightsSeqButton.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -818,9 +879,20 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     {
                                         lightsSeqs.removeIndex(currentSeqIndex)
                                     }
+                                    else
+                                    {
+                                        lightsSeqs[0].clear()
+                                        lightsSeqs[0].add(LEDPage(pannelWidth, pannelHeight))
+                                        lightsSeqs[0].name = "新建灯光片段"
+                                        currentPageIndex = 0
+                                        pageToPannel()
+                                        syncFrameLabel()
+                                        syncTotalFrames()
+                                    }
                                 }
                             })
                             buttonsTable.add(addLightsSeqButton)
+                            buttonsTable.add(duplicateLightsSeqButton)
                             buttonsTable.add(editLightsSeqButton)
                             buttonsTable.add(deleteLightsSeqButton)
                             buttonsTable.pack()
@@ -833,7 +905,10 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     changeSeq(lightsSeqList.selectedIndex)
                                 }
                             })
-                            lightsSeqTable.add(lightsSeqList).colspan(2).expand().top().fillX().row()
+                            val scrollpane = VisScrollPane(lightsSeqList)
+                            scrollpane.fadeScrollBars = false
+                            scrollpane.setFlickScroll(false)
+                            lightsSeqTable.add(scrollpane).colspan(2).expand().top().fillX().row()
                             lightsSeqTable.cells.forEach {
                                 it.pad(5f * R.SCALE)
                             }
@@ -853,7 +928,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                             lightsQueueTable.add("灯光序列").left()
                             val buttonsTable = VisTable()
 
-                            val addLightsQueueButton = VisTextButton("+")
+                            val addLightsQueueButton = getImageButtonWithBorder("add")
                             addLightsQueueButton.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -873,7 +948,22 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     queueEditor.fadeIn()
                                 }
                             })
-                            val editLightsQueueButton = VisTextButton("E")
+                            val duplicateLightsQueueButton = getImageButtonWithBorder("duplicate")
+                            duplicateLightsQueueButton.addListener(object : ChangeListener()
+                            {
+                                override fun changed(event: ChangeEvent?, actor: Actor?)
+                                {
+                                    val currentLightsQueue = currentLightsQueue
+                                    if(currentLightsQueue == null) return
+                                    val queue = NamedQueue<LEDCell>(currentLightsQueue.name)
+                                    queue.name = "@${Any().hashCode()}"
+                                    currentLightsQueue.forEach {
+                                        queue.addLast(it.clone() as LEDCell)
+                                    }
+                                    lightsQueues.insert(currentLightsQueuesIndex + 1, queue)
+                                }
+                            })
+                            val editLightsQueueButton = getImageButtonWithBorder("edit")
                             editLightsQueueButton.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -895,7 +985,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                     queueEditor.fadeIn()
                                 }
                             })
-                            val deleteLightsQueueButton = VisTextButton("×")
+                            val deleteLightsQueueButton = getImageButtonWithBorder("delete")
                             deleteLightsQueueButton.addListener(object : ChangeListener()
                             {
                                 override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -908,11 +998,14 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                                 }
                             })
                             buttonsTable.add(addLightsQueueButton)
+                            buttonsTable.add(duplicateLightsQueueButton)
                             buttonsTable.add(editLightsQueueButton)
                             buttonsTable.add(deleteLightsQueueButton)
                             lightsQueueTable.add(buttonsTable).row()
-
-                            lightsQueueTable.add(lightsQueueList).colspan(2).expand().top().fillX().row()
+                            val scrollpane = VisScrollPane(lightsQueueList)
+                            scrollpane.fadeScrollBars = false
+                            scrollpane.setFlickScroll(false)
+                            lightsQueueTable.add(scrollpane).colspan(2).expand().top().fillX().row()
                             lightsQueueTable.cells.forEach {
                                 it.pad(5f * R.SCALE)
                             }
@@ -1002,6 +1095,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         mainLeftSplitPane.setWidgets(lightsToolsTable, lightsColorTable, lightsQueueTable, lightsSeqTable)
                         mainLeftSplitPane.setSplit(0, 0.125f * R.splitScale)
                         mainLeftSplitPane.setSplit(1, 0.25f * R.splitScale)
+                        mainLeftSplitPane.setSplit(2, 0.45f * R.splitScale)
                         mainLeftSplitPane.pack()
 
                         setBackground(mainLeftSplitPane, tableBackground)
@@ -1034,7 +1128,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         ledPannelScrollPane.setFlickScroll(false)
                     }
                     mainMultiSplitPane.setWidgets(mainLeftSplitPane, ledPannelScrollPane)
-                    mainMultiSplitPane.setSplit(0, 0.2f * R.splitScale)
+                    mainMultiSplitPane.setSplit(0, 0.18f * R.splitScale)
                 }
                 mainTable.add(mainMultiSplitPane).grow()
                 mainTable.cells.forEach {
@@ -1046,13 +1140,13 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
             val bottomMenuBar = VisTable()
             run {
                 val timeLineControllerTable = VisTable()
-                val previousFrameButton = VisTextButton("<")
-                val nextFrameButton = VisTextButton(">")
+                val previousFrameButton = getImageButtonWithBorder("arrow_left")
+                val nextFrameButton = getImageButtonWithBorder("arrow_right")
                 totalFrameLabel = VisLabel("0")
                 totalFrameLabel.setAlignment(Align.center, Align.center)
                 currentFrameTextField = VisTextField("0")
                 currentFrameTextField.setAlignment(Align.center)
-                val addFrameButton = VisTextButton("+")
+                val addFrameButton = getImageButtonWithBorder("add")
                 currentFrameTextField.textFieldFilter = VisTextField.TextFieldFilter { textField, c ->
                     if (c.isDigit())
                         true
@@ -1066,7 +1160,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                     }
 
                 }
-                val deleteFrameButton = VisTextButton("×")
+                val deleteFrameButton = getImageButtonWithBorder("delete")
                 deleteFrameButton.addListener(object : ChangeListener()
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
@@ -1094,12 +1188,21 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         }
                     }
                 })
-                val duplicateFrameButton = VisTextButton("▼")
+                val duplicateMethodSelectBox = VisSelectBox<String>()
+                duplicateMethodSelectBox.setItems("仅复制", "复制并前移序列", "复制并后移序列")
+
+                val duplicateFrameButton = getImageButtonWithBorder("duplicate")
                 duplicateFrameButton.addListener(object : ChangeListener()
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)
                     {
-                        duplicatePage()
+                        duplicatePage(when(duplicateMethodSelectBox.selectedIndex)
+                        {
+                            1 -> -1
+                            2 -> 1
+                            else -> 0
+                        })
+
                     }
                 })
                 previousFrameButton.addListener(object : ChangeListener()
@@ -1131,9 +1234,15 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                 timeLineControllerTable.add(totalFrameLabel).width(50f * R.SCALE)
                 timeLineControllerTable.add(nextFrameButton)
                 timeLineControllerTable.add(addFrameButton).padLeft(5 * R.SCALE)
-                timeLineControllerTable.add(duplicateFrameButton)
                 timeLineControllerTable.add(deleteFrameButton)
+                timeLineControllerTable.addSeparator(true)
+                timeLineControllerTable.add(duplicateFrameButton)
+                timeLineControllerTable.add(duplicateMethodSelectBox)
                 timeLineControllerTable.pack()
+                timeLineControllerTable.cells.forEach {
+                    it.padLeft(2f * R.SCALE).padRight(2f * R.SCALE)
+                }
+
                 bottomMenuBar.add(timeLineControllerTable).row()
                 bottomMenuBar.pack()
                 disabledWidgetsWhenPlaying.add(bottomMenuBar)
@@ -1156,7 +1265,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
         Gdx.input.inputProcessor = stage;
 
         (stage.viewport as ScreenViewport).unitsPerPixel = R.unitsPerPixel
-        changePage(0)
+//        changePage(0)
 
     }
 
@@ -1174,7 +1283,16 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
             rainbowQueue.addLast(ColorizedLEDCell(color.fromHsv(h.toFloat(), 1f, 1f)))
         }
         lightsQueues.add(rainbowQueue)
-        lightsSeqs.add(newSeq("新建灯光片段"))
+        lightsSeqs.setSize(1)
+        lightsSeqs.set(0, newSeq("新建灯光片段"))
+        currentSeqIndex = 0
+        currentPageIndex = 0
+        pageToPannel()
+        refreshLightsQueue()
+        refreshLightsSeqsList()
+        syncTotalFrames()
+
+        colorCell()
     }
 
     private fun saveAsMidiFile(file: FileHandle)
@@ -1231,7 +1349,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
         }
     }
 
-    private fun duplicatePage()
+    private fun duplicatePage(offset: Int)
     {
         pannelToPage()
         val page = LEDPage(pannelWidth, pannelHeight)
@@ -1242,8 +1360,10 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
             {
                 page.leds[i][j] = currentPage.leds[i][j].clone() as LEDCell
                 val led = page.leds[i][j]
-                if (led is LEDCell.QueuedLEDCell)
-                    led.ledsQueueOffset++
+                if(led is LEDCell.QueuedLEDCell)
+                {
+                    led.ledsQueueOffset += offset
+                }
                 //TODO: 移除
                 //TODO: offset设置
                 //TODO: SmartInsert
@@ -1389,19 +1509,25 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
     override fun hide()
     {
     }
-
+    fun getImageButtonWithBorder(iconName: String): VisImageButton
+    {
+        val button = VisImageButton(VisUI.getSkin().get(VisImageButton.VisImageButtonStyle::class.java))
+        button.add(Image(GdxGame.getTexture("$iconName.png"))).size(16f * R.SCALE)
+        button.pack()
+        return button
+    }
     open inner class LEDQueueEditor(val ledQueue: NamedQueue<LEDCell> = NamedQueue()) : VisWindow("编辑灯光序列")
     {
         var callback: Windows.BooleanCallback? = null
         init
         {
-            val ledTexture = Texture("led.png")
+            val ledTexture = GdxGame.getTexture("led.png")
             val rootTable = VisTable()
             run {
-                val addButton = VisTextButton("+")
-                val addFrontButton = VisTextButton("+")
-                val removeFrontButton = VisTextButton("×")
-                val removeButton = VisTextButton("×")
+                val addButton = getImageButtonWithBorder("add")
+                val addFrontButton = getImageButtonWithBorder("add")
+                val removeFrontButton = getImageButtonWithBorder("delete")
+                val removeButton = getImageButtonWithBorder("delete")
                 val buttonsTable = VisTable()
 
                 val ledsTable = VisTable()
@@ -1482,7 +1608,7 @@ class MainScreen : Screen, PagesSurface, Tools.CellsFiller, Project
                         updateTable()
                     }
                 })
-                val duplicateAllButton = VisTextButton("C")
+                val duplicateAllButton = getImageButtonWithBorder("duplicate")
                 duplicateAllButton.addListener(object : ChangeListener()
                 {
                     override fun changed(event: ChangeEvent?, actor: Actor?)

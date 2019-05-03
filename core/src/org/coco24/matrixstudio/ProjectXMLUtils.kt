@@ -10,6 +10,7 @@ import org.dom4j.io.SAXWriter
 import org.dom4j.io.XMLWriter
 import java.lang.Exception
 import com.badlogic.gdx.utils.Array
+import java.io.InputStreamReader
 
 object ProjectXMLUtils
 {
@@ -80,12 +81,12 @@ object ProjectXMLUtils
                 }
             }
         }
-        val outputFormat = OutputFormat.createPrettyPrint();
-        outputFormat.encoding = "UTF-8";
-        outputFormat.setIndent(true); //设置是否缩进
-        outputFormat.indent = "  "; //以四个空格方式实现缩进
-        outputFormat.isNewlines = true; //设置是否换行
-        val xmlWriter = XMLWriter(fileHandle.writer(false), outputFormat)
+//        val outputFormat = OutputFormat.createPrettyPrint();
+//        outputFormat.encoding = "UTF-8";
+//        outputFormat.setIndent(true); //设置是否缩进
+//        outputFormat.indent = "  "; //以四个空格方式实现缩进
+//        outputFormat.isNewlines = true; //设置是否换行
+        val xmlWriter = XMLWriter(fileHandle.writer(false, "UTF-8"))//, outputFormat)
         xmlWriter.write(document)
         xmlWriter.close()
     }
@@ -96,7 +97,7 @@ object ProjectXMLUtils
 
         val documentFactory = DocumentFactory.getInstance()
         val saxReader = SAXReader(documentFactory)
-        val document = saxReader.read(fileHandle.read())
+        val document = saxReader.read(fileHandle.reader("UTF-8"))
         val projectElement = document.rootElement
 
         val queuesElement = projectElement.element("Queues")

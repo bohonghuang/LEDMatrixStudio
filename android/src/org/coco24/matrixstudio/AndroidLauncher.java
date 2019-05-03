@@ -7,7 +7,6 @@ import android.os.Bundle;
 
 import com.badlogic.gdx.backends.android.AndroidApplication;
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
-import org.coco24.matrixstudio.MyGdxGame;
 
 public class AndroidLauncher extends AndroidApplication {
 	@Override
@@ -21,6 +20,6 @@ public class AndroidLauncher extends AndroidApplication {
 				this.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
 			}
 		}
-		initialize(new MyGdxGame(), config);
+		initialize(new GdxGame(), config);
 	}
 }
